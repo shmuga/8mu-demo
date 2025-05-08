@@ -56,7 +56,7 @@ new p5((p) => {
   // Camera parameters
   let cameraParams = {
     radius: 800,
-    height: 300,
+    height: 1000, // Increased height for top-down view
     autoRotate: true,
     rotationSpeed: 0.001,
     tiltAngle: 0,
@@ -897,12 +897,13 @@ new p5((p) => {
     p.pointLight(255, 255, 255, 0, 0, 300);
     p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
     
-    // Create a camera view that looks at the landscape from an angle
+    // Create a camera view that looks at the landscape from the top
     let camAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
     camAngle += cameraParams.rotationOffset; // Add rotation from MIDI controls
     
-    const camX = cameraParams.radius * Math.sin(camAngle);
-    const camZ = cameraParams.radius * Math.cos(camAngle);
+    // For top-down view, we position the camera directly above with a slight angle
+    const camX = cameraParams.radius * 0.2 * Math.sin(camAngle);
+    const camZ = cameraParams.radius * 0.2 * Math.cos(camAngle);
     
     // Apply tilt and lift adjustments
     const camY = cameraParams.height + (cameraParams.tiltAngle * cameraParams.radius);
