@@ -65,7 +65,12 @@ new p5((p) => {
     tiltAngle: -Math.PI * 0.25, // Negative angle to look down
     liftAngle: 0,
     rotationOffset: Math.PI * 0.25, // Start at 45 degrees
-    orbitAngle: -Math.PI * 0.25 // Negative angle to look down
+    orbitAngle: -Math.PI * 0.25, // Negative angle to look down
+    mouseControl: false, // Flag to enable/disable mouse control
+    mouseX: 0,
+    mouseY: 0,
+    targetRotation: Math.PI * 0.25,
+    targetTilt: -Math.PI * 0.25
   };
   
   // Force parameters
@@ -1049,6 +1054,18 @@ new p5((p) => {
           <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
             <strong>P</strong> - Pause/Play
           </div>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>M</strong> - Toggle Mouse Control
+          </div>
+        </div>
+        <div style="margin: 20px 0;">
+          <h3>Mouse Controls</h3>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>Drag</strong> - Rotate Camera
+          </div>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>Scroll</strong> - Zoom In/Out
+          </div>
         </div>
         <button id="close-settings" style="padding: 10px 20px; background: #4a90e2; color: white; border: none; border-radius: 5px; cursor: pointer;">
           Close Settings
@@ -1083,6 +1100,9 @@ new p5((p) => {
     if (settingsPanel) {
       settingsPanel.style.display = showSettings ? 'block' : 'none';
     }
+    
+    // Disable mouse control when settings are open
+    cameraParams.mouseControl = !showSettings;
   }
   
   // Update settings UI with current values
@@ -1227,7 +1247,8 @@ new p5((p) => {
   function updateStatusBar() {
     const statusText = document.getElementById('simulation-status');
     if (statusText) {
-      statusText.textContent = `Simulation: ${simulationState.toUpperCase()}`;
+      const mouseStatus = cameraParams.mouseControl ? 'MOUSE ENABLED' : 'MOUSE DISABLED';
+      statusText.textContent = `Simulation: ${simulationState.toUpperCase()} | ${mouseStatus}`;
     }
   }
   
@@ -1243,6 +1264,9 @@ new p5((p) => {
         updateStatusBar();
       } else if (event.key === 'p' || event.key === 'P') {
         simulationState = simulationState === 'running' ? 'paused' : 'running';
+        updateStatusBar();
+      } else if (event.key === 'm' || event.key === 'M') {
+        cameraParams.mouseControl = !cameraParams.mouseControl;
         updateStatusBar();
       }
       
@@ -1266,6 +1290,52 @@ new p5((p) => {
     });
   }
   
+  // Setup mouse control
+  function setupMouseControl() {
+    // Mouse drag to rotate camera
+    p.mousePressed = () => {
+      if (cameraParams.mouseControl && !showSettings) {
+        cameraParams.mouseX = p.mouseX;
+        cameraParams.mouseY = p.mouseY;
+      }
+    };
+    
+    p.mouseDragged = () => {
+      if (cameraParams.mouseControl && !showSettings) {
+        // Calculate mouse movement
+        const dx = p.mouseX - cameraParams.mouseX;
+        const dy = p.mouseY - cameraParams.mouseY;
+        
+        // Update rotation based on horizontal mouse movement
+        cameraParams.targetRotation += dx * 0.01;
+        
+        // Update tilt based on vertical mouse movement (with limits)
+        cameraParams.targetTilt = p.constrain(
+          cameraParams.targetTilt - dy * 0.01,
+          -Math.PI / 2,  // Limit looking up
+          Math.PI / 4    // Limit looking down
+        );
+        
+        // Store current mouse position
+        cameraParams.mouseX = p.mouseX;
+        cameraParams.mouseY = p.mouseY;
+      }
+    };
+    
+    // Mouse wheel to zoom
+    p.mouseWheel = (event) => {
+      if (cameraParams.mouseControl && !showSettings) {
+        // Adjust camera radius (zoom)
+        cameraParams.radius = p.constrain(
+          cameraParams.radius + event.delta,
+          300,   // Minimum zoom
+          2000   // Maximum zoom
+        );
+        return false; // Prevent default scrolling
+      }
+    };
+  }
+  
   p.setup = () => {
     p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
     
@@ -1278,6 +1348,11 @@ new p5((p) => {
     createSettingsUI();
     createStatusBar();
     setupKeyboardShortcuts();
+    setupMouseControl();
+    
+    // Enable mouse control by default
+    cameraParams.mouseControl = true;
+    updateStatusBar();
   };
 
   p.draw = () => {
@@ -1292,9 +1367,17 @@ new p5((p) => {
     // Add a second light source for better sphere rendering
     p.pointLight(160, 170, 190, -300, 200, 300); // Slightly blue fill light
     
+    // Smoothly interpolate camera rotation and tilt when using mouse control
+    if (cameraParams.mouseControl) {
+      cameraParams.rotationOffset = p.lerp(cameraParams.rotationOffset, cameraParams.targetRotation, 0.1);
+      cameraParams.tiltAngle = p.lerp(cameraParams.tiltAngle, cameraParams.targetTilt, 0.1);
+    }
+    
     // Create a camera view from a 2.5D angle
-    let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
-    horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls
+    let horizontalAngle = cameraParams.autoRotate && !cameraParams.mouseControl 
+      ? p.frameCount * cameraParams.rotationSpeed 
+      : 0;
+    horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls or mouse
     
     // Calculate camera position for 2.5D view with tilt in a single plane
     // Use tiltAngle to adjust the camera height and distance
