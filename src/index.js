@@ -607,11 +607,11 @@ new p5((p) => {
     for (let i = 0; i < organicModel.particles.length; i++) {
       const particle = organicModel.particles[i];
       
-      // Apply turbulence with randomness parameter
+      // Apply turbulence with randomness parameter - more movement on Y axis
       particle.velocity.add(
         p.createVector(
           p.random(-turbulence - randomness, turbulence + randomness),
-          p.random(-turbulence - randomness, turbulence + randomness),
+          p.random(-turbulence - randomness * 1.5, turbulence + randomness * 1.5), // Increased Y movement
           p.random(-turbulence - randomness, turbulence + randomness)
         )
       );
@@ -659,22 +659,33 @@ new p5((p) => {
       particle.velocity.mult(0.98); // Damping
       particle.position.add(p5.Vector.mult(particle.velocity, speed));
       
-      // Check if particle is going beyond terrain boundaries and wrap it to the other side
+      // Create a box-like environment with transparent walls
       const terrainSize = organicModel.terrainSize;
       const halfSize = terrainSize / 2;
+      const maxHeight = organicModel.terrainHeight * 2; // Maximum height for the box
       
-      // Wrap around X axis
+      // Bounce off X walls
       if (particle.position.x > halfSize) {
-        particle.position.x = -halfSize;
-      } else if (particle.position.x < -halfSize) {
         particle.position.x = halfSize;
+        particle.velocity.x *= -0.8; // Bounce with energy loss
+      } else if (particle.position.x < -halfSize) {
+        particle.position.x = -halfSize;
+        particle.velocity.x *= -0.8;
       }
       
-      // Wrap around Z axis
+      // Bounce off Z walls
       if (particle.position.z > halfSize) {
-        particle.position.z = -halfSize;
-      } else if (particle.position.z < -halfSize) {
         particle.position.z = halfSize;
+        particle.velocity.z *= -0.8;
+      } else if (particle.position.z < -halfSize) {
+        particle.position.z = -halfSize;
+        particle.velocity.z *= -0.8;
+      }
+      
+      // Bounce off ceiling (Y max)
+      if (particle.position.y > maxHeight) {
+        particle.position.y = maxHeight;
+        particle.velocity.y *= -0.8;
       }
       
       // Check for collision with terrain and bounce
@@ -887,10 +898,13 @@ new p5((p) => {
     }
   }
   
-  // Draw the terrain mesh
+  // Draw the terrain mesh and transparent box walls
   function drawTerrain() {
     const terrain = organicModel.terrain;
     const resolution = organicModel.terrainResolution;
+    const terrainSize = organicModel.terrainSize;
+    const halfSize = terrainSize / 2;
+    const maxHeight = organicModel.terrainHeight * 2;
     
     // Draw terrain as triangles with thin black stroke
     p.strokeWeight(0.2);
@@ -952,6 +966,57 @@ new p5((p) => {
         p.endShape();
       }
     }
+    
+    // Draw transparent box walls
+    p.push();
+    p.noFill();
+    p.stroke(255, 30); // Very subtle white lines
+    p.strokeWeight(0.5);
+    
+    // Draw box at terrain boundaries
+    p.beginShape(p.LINES);
+    
+    // Bottom edges (already have terrain there, but complete the box)
+    p.vertex(-halfSize, 0, -halfSize);
+    p.vertex(-halfSize, 0, halfSize);
+    
+    p.vertex(-halfSize, 0, halfSize);
+    p.vertex(halfSize, 0, halfSize);
+    
+    p.vertex(halfSize, 0, halfSize);
+    p.vertex(halfSize, 0, -halfSize);
+    
+    p.vertex(halfSize, 0, -halfSize);
+    p.vertex(-halfSize, 0, -halfSize);
+    
+    // Vertical edges
+    p.vertex(-halfSize, 0, -halfSize);
+    p.vertex(-halfSize, maxHeight, -halfSize);
+    
+    p.vertex(-halfSize, 0, halfSize);
+    p.vertex(-halfSize, maxHeight, halfSize);
+    
+    p.vertex(halfSize, 0, halfSize);
+    p.vertex(halfSize, maxHeight, halfSize);
+    
+    p.vertex(halfSize, 0, -halfSize);
+    p.vertex(halfSize, maxHeight, -halfSize);
+    
+    // Top edges
+    p.vertex(-halfSize, maxHeight, -halfSize);
+    p.vertex(-halfSize, maxHeight, halfSize);
+    
+    p.vertex(-halfSize, maxHeight, halfSize);
+    p.vertex(halfSize, maxHeight, halfSize);
+    
+    p.vertex(halfSize, maxHeight, halfSize);
+    p.vertex(halfSize, maxHeight, -halfSize);
+    
+    p.vertex(halfSize, maxHeight, -halfSize);
+    p.vertex(-halfSize, maxHeight, -halfSize);
+    
+    p.endShape();
+    p.pop();
   }
   
   // Create settings UI as HTML
