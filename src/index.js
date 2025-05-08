@@ -238,13 +238,41 @@ new p5((p) => {
     const sizeNoise = p.noise(x * 0.05, z * 0.05);
     const fixedSize = p.map(sizeNoise, 0, 1, 4, 12);
     
-    // Generate a stable color based on position
-    const hue = p.map(p.noise(x * 0.02, z * 0.02), 0, 1, 0, 360);
-    const sat = p.map(p.noise(x * 0.03, y * 0.03), 0, 1, 50, 80);
-    const bri = p.map(p.noise(y * 0.02, z * 0.02), 0, 1, 60, 90);
+    // Generate a stable, accessible color based on position
+    // Use a more limited color palette with good contrast
+    const colorSeed = p.noise(x * 0.02, z * 0.02);
+    let hue, sat, bri;
+    
+    // Create a palette of 5 distinct, accessible colors
+    if (colorSeed < 0.2) {
+      // Teal
+      hue = 180;
+      sat = 60;
+      bri = 80;
+    } else if (colorSeed < 0.4) {
+      // Gold
+      hue = 45;
+      sat = 70;
+      bri = 85;
+    } else if (colorSeed < 0.6) {
+      // Purple
+      hue = 270;
+      sat = 50;
+      bri = 75;
+    } else if (colorSeed < 0.8) {
+      // Green
+      hue = 120;
+      sat = 40;
+      bri = 70;
+    } else {
+      // Coral
+      hue = 15;
+      sat = 65;
+      bri = 90;
+    }
     
     p.colorMode(p.HSB, 360, 100, 100, 255);
-    const stableColor = p.color(hue, sat, bri, 200);
+    const stableColor = p.color(hue, sat, bri, 220);
     p.colorMode(p.RGB, 255, 255, 255, 255);
     
     // Create control points for Bezier motion
@@ -341,29 +369,29 @@ new p5((p) => {
     return terrain;
   }
   
-  // Get color based on terrain height with red and blue shades
+  // Get color based on terrain height with neutral, accessible colors
   function getTerrainColor(height, maxHeight) {
     p.colorMode(p.HSB, 360, 100, 100, 255);
     
-    // Deep water (dark blue)
+    // Deep water (muted blue-gray)
     if (height < -maxHeight * 0.3) {
-      return p.color(220, 80, 60, 200);
+      return p.color(210, 30, 50, 200);
     }
-    // Shallow water (light blue)
+    // Shallow water (light gray-blue)
     else if (height < -maxHeight * 0.1) {
-      return p.color(200, 70, 80, 200);
+      return p.color(200, 20, 70, 200);
     }
-    // Low ground (light red)
+    // Low ground (light beige)
     else if (height < maxHeight * 0.2) {
-      return p.color(350, 60, 80, 200);
+      return p.color(40, 20, 85, 200);
     }
-    // Medium height (medium red)
+    // Medium height (medium taupe)
     else if (height < maxHeight * 0.4) {
-      return p.color(0, 70, 70, 200);
+      return p.color(35, 25, 65, 200);
     }
-    // High ground (dark red)
+    // High ground (dark gray-brown)
     else {
-      return p.color(10, 80, 60, 200);
+      return p.color(30, 30, 45, 200);
     }
   }
   
@@ -1116,16 +1144,16 @@ new p5((p) => {
   };
 
   p.draw = () => {
-    p.background(20);
+    p.background(35); // Slightly lighter background for better contrast
     
-    // Enhanced lighting for better 3D appearance
-    p.ambientLight(60, 60, 60);
-    p.pointLight(255, 255, 255, 0, 0, 300);
-    p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
-    p.specularColor(255, 255, 255);
+    // Enhanced lighting for better 3D appearance with softer, more accessible lighting
+    p.ambientLight(70, 70, 70); // Brighter ambient light for better visibility
+    p.pointLight(240, 240, 220, 0, 0, 300); // Slightly warmer main light
+    p.directionalLight(180, 180, 200, 0.5, 1, -0.5); // Cooler directional light
+    p.specularColor(220, 220, 220); // Less harsh specular highlights
     
     // Add a second light source for better sphere rendering
-    p.pointLight(180, 180, 220, -300, 200, 300);
+    p.pointLight(160, 170, 190, -300, 200, 300); // Slightly blue fill light
     
     // Create a camera view from a 2.5D angle
     let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
