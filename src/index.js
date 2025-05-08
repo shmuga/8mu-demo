@@ -58,14 +58,14 @@ new p5((p) => {
   
   // Camera parameters
   let cameraParams = {
-    radius: 100,
-    height: 100, // Lower height for more top-down view
+    radius: 1000,
+    height: 1000, // Higher position to look down
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
-    tiltAngle: Math.PI * 0.25, // 45 degrees for 2.5D view
-    liftAngle: Math.PI *2,
+    tiltAngle: -Math.PI * 0.25, // Negative angle to look down
+    liftAngle: 0,
     rotationOffset: Math.PI * 0.25, // Start at 45 degrees
-    orbitAngle: Math.PI * 0.25 // 45 degrees for 2.5D view
+    orbitAngle: -Math.PI * 0.25 // Negative angle to look down
   };
   
   // Force parameters
@@ -1303,9 +1303,10 @@ new p5((p) => {
     const forwardOffset = baseHeight * Math.sin(cameraParams.tiltAngle);
     
     // Convert to Cartesian coordinates with adjusted angles for 2.5D view
-    const camX = cameraParams.radius * Math.sin(horizontalAngle) + forwardOffset * Math.sin(horizontalAngle);
-    const camY = adjustedHeight; // Height adjusted by tilt
-    const camZ = cameraParams.radius * Math.cos(horizontalAngle) + forwardOffset * Math.cos(horizontalAngle);
+    // Position camera high on Y axis looking down at XZ plane
+    const camX = cameraParams.radius * Math.sin(horizontalAngle);
+    const camY = adjustedHeight; // High on Y axis
+    const camZ = cameraParams.radius * Math.cos(horizontalAngle);
     
     // Apply additional lift adjustment
     const liftAxis = p.createVector(
