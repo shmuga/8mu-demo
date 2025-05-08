@@ -1,23 +1,21 @@
 import * as m from './module.js';
+import p5 from 'p5';
 
-function setup() {
-  createCanvas(windowWidth, windowHeight);
-}
+new p5((p) => {
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, p.windowHeight);
+  };
 
-function draw() {
-  background(220);
-  
-  // Draw a circle in the middle of the screen
-  fill(100, 150, 255);
-  noStroke();
-  circle(windowWidth/2, windowHeight/2, 100);
-}
+  p.draw = () => {
+    p.background(220);
+    
+    // Draw a circle in the middle of the screen
+    p.fill(100, 150, 255);
+    p.noStroke();
+    p.circle(p.windowWidth/2, p.windowHeight/2, 100);
+  };
 
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
-}
-
-// Attach p5.js functions to window to make them global
-window.setup = setup;
-window.draw = draw;
-window.windowResized = windowResized;
+  p.windowResized = () => {
+    p.resizeCanvas(p.windowWidth, p.windowHeight);
+  };
+});
