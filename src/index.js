@@ -58,17 +58,17 @@ new p5((p) => {
   
   // Camera parameters
   let cameraParams = {
-    radius: -300,
+    radius: 300, // Positive radius for horizontal flip
     height: -200, // Higher position to look down
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
     zRotation: Math.PI, // Rotation around Z axis (tilt front/back) - 180 degrees
     xRotation: 0, // Rotation around X axis (lift right/left)
-    yRotation: Math.PI * 1.25, // Rotation around Y axis (rotate right/left) - added 180 degrees
+    yRotation: Math.PI * 0.75, // Rotation around Y axis (rotate right/left) - adjusted for horizontal flip
     mouseControl: false, // Flag to enable/disable mouse control
     mouseX: 0,
     mouseY: 0,
-    targetYRotation: Math.PI * 1.25 // Added 180 degrees
+    targetYRotation: Math.PI * 0.75 // Adjusted for horizontal flip
   };
   
   // Force parameters
@@ -830,17 +830,17 @@ new p5((p) => {
     const axisLength = 200;
     p.strokeWeight(2);
     
-    // X axis - Red (flipped for 180 degree rotation)
+    // X axis - Red (flipped horizontally)
     p.stroke(255, 0, 0);
-    p.line(0, 0, 0, -axisLength, 0, 0);
+    p.line(0, 0, 0, axisLength, 0, 0);
     
     // Y axis - Green
     p.stroke(0, 255, 0);
     p.line(0, 0, 0, 0, axisLength, 0);
     
-    // Z axis - Blue (flipped for 180 degree rotation)
+    // Z axis - Blue (flipped horizontally)
     p.stroke(0, 0, 255);
-    p.line(0, 0, 0, 0, 0, -axisLength);
+    p.line(0, 0, 0, 0, 0, axisLength);
     
     // Reset stroke
     p.strokeWeight(1);
@@ -1373,8 +1373,8 @@ new p5((p) => {
       : 0;
     baseAngle += cameraParams.yRotation; // Add Y rotation (around vertical axis)
     
-    // Start with base camera position - rotated 180 degrees
-    let camX = 0, camY = -cameraParams.height, camZ = cameraParams.radius; // Inverted Z for 180 degree rotation
+    // Start with base camera position - flipped horizontally
+    let camX = 0, camY = -cameraParams.height, camZ = -cameraParams.radius; // Inverted Z for horizontal flip
     
     // Create rotation matrices
     // First rotate around Y axis (horizontal rotation)
