@@ -6,6 +6,8 @@ new p5((p) => {
   // Simulation state
   let simulationState = 'running'; // 'running', 'paused', 'reset'
   let showSettings = false;
+  let lastChangedParam = null;
+  let paramChangeTimer = 0;
   
   // MIDI parameters
   const midiParams = {
@@ -85,11 +87,35 @@ new p5((p) => {
           const paramIndex = midiParams.faderMappings.indexOf(ccNumber);
           if (paramIndex !== -1) {
             midiParams.faderValues[paramIndex] = ccValue;
+            
+            // Show parameter change notification
+            showParamChangeNotification(paramIndex, ccValue);
           }
         });
       });
     } catch (err) {
       console.error("WebMidi could not be enabled:", err);
+    }
+  }
+  
+  // Show parameter change notification
+  function showParamChangeNotification(paramIndex, value) {
+    const notification = document.getElementById('param-change-notification');
+    if (notification) {
+      const paramName = midiParams.paramNames[paramIndex];
+      const valuePercent = Math.round(value * 100);
+      notification.textContent = `${paramName}: ${valuePercent}%`;
+      notification.style.display = 'block';
+      notification.style.opacity = '1';
+      
+      // Store the last changed parameter
+      lastChangedParam = {
+        index: paramIndex,
+        value: value
+      };
+      
+      // Reset the timer
+      paramChangeTimer = 120; // Show for about 2 seconds (60 frames per second)
     }
   }
   
@@ -565,7 +591,7 @@ new p5((p) => {
   function updateSettingsUI() {
     if (!showSettings) return;
     
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < midiParams.paramNames.length; i++) {
       const valueBar = document.getElementById(`midi-value-bar-${i}`);
       const valueText = document.getElementById(`midi-value-text-${i}`);
       
@@ -605,6 +631,22 @@ new p5((p) => {
     statusBar.appendChild(statusText);
     statusBar.appendChild(controlsText);
     document.body.appendChild(statusBar);
+    
+    // Create parameter change notification
+    const paramChangeNotification = document.createElement('div');
+    paramChangeNotification.id = 'param-change-notification';
+    paramChangeNotification.style.position = 'absolute';
+    paramChangeNotification.style.top = '20px';
+    paramChangeNotification.style.right = '20px';
+    paramChangeNotification.style.padding = '10px 15px';
+    paramChangeNotification.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    paramChangeNotification.style.color = 'white';
+    paramChangeNotification.style.fontFamily = 'Arial, sans-serif';
+    paramChangeNotification.style.borderRadius = '5px';
+    paramChangeNotification.style.zIndex = '999';
+    paramChangeNotification.style.display = 'none';
+    paramChangeNotification.style.transition = 'opacity 0.5s';
+    document.body.appendChild(paramChangeNotification);
   }
   
   // Update status bar with current state
@@ -628,6 +670,24 @@ new p5((p) => {
       } else if (event.key === 'p' || event.key === 'P') {
         simulationState = simulationState === 'running' ? 'paused' : 'running';
         updateStatusBar();
+      }
+      
+      // Number keys 1-9 to manually adjust parameters
+      const numKey = parseInt(event.key);
+      if (!isNaN(numKey) && numKey >= 1 && numKey <= midiParams.paramNames.length) {
+        const paramIndex = numKey - 1;
+        let newValue = midiParams.faderValues[paramIndex];
+        
+        if (event.shiftKey) {
+          // Decrease value with Shift+number
+          newValue = Math.max(0, newValue - 0.1);
+        } else {
+          // Increase value with number
+          newValue = Math.min(1, newValue + 0.1);
+        }
+        
+        midiParams.faderValues[paramIndex] = newValue;
+        showParamChangeNotification(paramIndex, newValue);
       }
     });
   }
@@ -678,6 +738,23 @@ new p5((p) => {
     
     // Update HTML UI elements
     updateSettingsUI();
+    
+    // Update parameter change notification
+    if (paramChangeTimer > 0) {
+      paramChangeTimer--;
+      
+      // Fade out when timer is low
+      if (paramChangeTimer < 30) {
+        const notification = document.getElementById('param-change-notification');
+        if (notification) {
+          notification.style.opacity = paramChangeTimer / 30;
+          
+          if (paramChangeTimer === 0) {
+            notification.style.display = 'none';
+          }
+        }
+      }
+    }
   };
 
   p.windowResized = () => {
