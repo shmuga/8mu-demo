@@ -12,6 +12,7 @@ new p5((p) => {
   // MIDI parameters
   const midiParams = {
     faderValues: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    smoothedValues: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // For smoothed gesture values
     faderMappings: [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], // Default MIDI CC values
     paramNames: [
       'Size', 
@@ -28,7 +29,8 @@ new p5((p) => {
       'Lift Left',  // CC 45
       'Rotate Right', // CC 46
       'Rotate Left'   // CC 47
-    ]
+    ],
+    smoothingFactor: 0.15 // Controls how quickly gesture values change (0-1)
   };
   
   // Organic model parameters
@@ -100,28 +102,81 @@ new p5((p) => {
   
   // Show parameter change notification
   function showParamChangeNotification(paramIndex, value) {
-    const notification = document.getElementById('param-change-notification');
-    if (notification) {
+    const isGesture = paramIndex >= 8; // Parameters 8-13 are gestures
+    
+    // Update the appropriate notification panel
+    if (isGesture) {
+      updateGesturePanel(paramIndex, value);
+    } else {
+      updateParameterPanel(paramIndex, value);
+    }
+    
+    // Store the last changed parameter
+    lastChangedParam = {
+      index: paramIndex,
+      value: value,
+      isGesture: isGesture
+    };
+    
+    // Reset the timer
+    paramChangeTimer = 120; // Show for about 2 seconds (60 frames per second)
+  }
+  
+  // Update the parameter panel on the left
+  function updateParameterPanel(paramIndex, value) {
+    const panel = document.getElementById('parameter-panel');
+    if (panel) {
       const paramName = midiParams.paramNames[paramIndex];
       const valuePercent = Math.round(value * 100);
       
-      // Determine if this is a gesture or simulation control parameter
-      const isGesture = paramIndex >= 8; // Parameters 8-13 are gestures
-      const groupName = isGesture ? "GESTURE" : "SIMULATION";
+      // Update or create the parameter display
+      let paramDisplay = document.getElementById(`param-display-${paramIndex}`);
+      if (!paramDisplay) {
+        paramDisplay = document.createElement('div');
+        paramDisplay.id = `param-display-${paramIndex}`;
+        paramDisplay.className = 'param-display';
+        panel.appendChild(paramDisplay);
+      }
       
-      notification.innerHTML = `<strong>${groupName}</strong><br>${paramName}: ${valuePercent}%`;
-      notification.style.display = 'block';
-      notification.style.opacity = '1';
+      paramDisplay.innerHTML = `
+        <div class="param-name">${paramName}</div>
+        <div class="param-value-bar">
+          <div class="param-value-fill" style="width: ${valuePercent}%"></div>
+        </div>
+        <div class="param-value-text">${valuePercent}%</div>
+      `;
       
-      // Store the last changed parameter
-      lastChangedParam = {
-        index: paramIndex,
-        value: value,
-        isGesture: isGesture
-      };
+      // Make sure the panel is visible
+      panel.style.opacity = '1';
+    }
+  }
+  
+  // Update the gesture panel on the right
+  function updateGesturePanel(paramIndex, value) {
+    const panel = document.getElementById('gesture-panel');
+    if (panel) {
+      const paramName = midiParams.paramNames[paramIndex];
+      const valuePercent = Math.round(value * 100);
       
-      // Reset the timer
-      paramChangeTimer = 120; // Show for about 2 seconds (60 frames per second)
+      // Update or create the gesture display
+      let gestureDisplay = document.getElementById(`gesture-display-${paramIndex}`);
+      if (!gestureDisplay) {
+        gestureDisplay = document.createElement('div');
+        gestureDisplay.id = `gesture-display-${paramIndex}`;
+        gestureDisplay.className = 'gesture-display';
+        panel.appendChild(gestureDisplay);
+      }
+      
+      gestureDisplay.innerHTML = `
+        <div class="gesture-name">${paramName}</div>
+        <div class="gesture-value-bar">
+          <div class="gesture-value-fill" style="width: ${valuePercent}%"></div>
+        </div>
+        <div class="gesture-value-text">${valuePercent}%</div>
+      `;
+      
+      // Make sure the panel is visible
+      panel.style.opacity = '1';
     }
   }
   
@@ -261,26 +316,43 @@ new p5((p) => {
     organicModel.connections = createConnections();
   }
   
+  // Smooth gesture values
+  function smoothGestureValues() {
+    // Only smooth gesture values (indices 8-13)
+    for (let i = 8; i < midiParams.faderValues.length; i++) {
+      midiParams.smoothedValues[i] = midiParams.smoothedValues[i] + 
+        (midiParams.faderValues[i] - midiParams.smoothedValues[i]) * midiParams.smoothingFactor;
+    }
+    
+    // Copy non-gesture values directly
+    for (let i = 0; i < 8; i++) {
+      midiParams.smoothedValues[i] = midiParams.faderValues[i];
+    }
+  }
+  
   // Update the organic model based on physics and MIDI parameters
   function updateOrganicModel() {
     if (simulationState !== 'running') return;
     
-    const size = p.map(midiParams.faderValues[0], 0, 1, 0.5, 2);
-    const speed = p.map(midiParams.faderValues[1], 0, 1, 0.1, 2);
-    const complexity = p.map(midiParams.faderValues[2], 0, 1, 0.5, 3);
-    const colorHue = p.map(midiParams.faderValues[3], 0, 1, 0, 360);
-    const brightness = p.map(midiParams.faderValues[4], 0, 1, 0.2, 1);
-    const particleDensity = p.map(midiParams.faderValues[5], 0, 1, 0.2, 1);
-    const connectionDensity = p.map(midiParams.faderValues[6], 0, 1, 0.2, 1);
-    const terrainHeight = p.map(midiParams.faderValues[7], 0, 1, 20, 200);
+    // Smooth gesture values
+    smoothGestureValues();
     
-    // Update camera parameters based on MIDI controls
-    const tiltFront = midiParams.faderValues[8];
-    const tiltBack = midiParams.faderValues[9];
-    const liftRight = midiParams.faderValues[10];
-    const liftLeft = midiParams.faderValues[11];
-    const rotateRight = midiParams.faderValues[12];
-    const rotateLeft = midiParams.faderValues[13];
+    const size = p.map(midiParams.smoothedValues[0], 0, 1, 0.5, 2);
+    const speed = p.map(midiParams.smoothedValues[1], 0, 1, 0.1, 2);
+    const complexity = p.map(midiParams.smoothedValues[2], 0, 1, 0.5, 3);
+    const colorHue = p.map(midiParams.smoothedValues[3], 0, 1, 0, 360);
+    const brightness = p.map(midiParams.smoothedValues[4], 0, 1, 0.2, 1);
+    const particleDensity = p.map(midiParams.smoothedValues[5], 0, 1, 0.2, 1);
+    const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0.2, 1);
+    const terrainHeight = p.map(midiParams.smoothedValues[7], 0, 1, 20, 200);
+    
+    // Update camera parameters based on MIDI controls (using smoothed values)
+    const tiltFront = midiParams.smoothedValues[8];
+    const tiltBack = midiParams.smoothedValues[9];
+    const liftRight = midiParams.smoothedValues[10];
+    const liftLeft = midiParams.smoothedValues[11];
+    const rotateRight = midiParams.smoothedValues[12];
+    const rotateLeft = midiParams.smoothedValues[13];
     
     // Calculate net tilt (front-back)
     cameraParams.tiltAngle = p.map(tiltFront - tiltBack, -1, 1, -0.5, 0.5);
@@ -645,8 +717,9 @@ new p5((p) => {
     }
   }
   
-  // Create status bar as HTML
+  // Create status bar and parameter panels as HTML
   function createStatusBar() {
+    // Create status bar
     const statusBar = document.createElement('div');
     statusBar.id = 'status-bar';
     statusBar.style.position = 'absolute';
@@ -675,23 +748,93 @@ new p5((p) => {
     statusBar.appendChild(controlsText);
     document.body.appendChild(statusBar);
     
-    // Create parameter change notification
-    const paramChangeNotification = document.createElement('div');
-    paramChangeNotification.id = 'param-change-notification';
-    paramChangeNotification.style.position = 'absolute';
-    paramChangeNotification.style.top = '20px';
-    paramChangeNotification.style.right = '20px';
-    paramChangeNotification.style.padding = '10px 15px';
-    paramChangeNotification.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-    paramChangeNotification.style.color = 'white';
-    paramChangeNotification.style.fontFamily = 'Arial, sans-serif';
-    paramChangeNotification.style.borderRadius = '5px';
-    paramChangeNotification.style.zIndex = '999';
-    paramChangeNotification.style.display = 'none';
-    paramChangeNotification.style.transition = 'opacity 0.5s';
-    paramChangeNotification.style.textAlign = 'center';
-    paramChangeNotification.style.minWidth = '180px';
-    document.body.appendChild(paramChangeNotification);
+    // Create parameter panel (left side)
+    const parameterPanel = document.createElement('div');
+    parameterPanel.id = 'parameter-panel';
+    parameterPanel.style.position = 'absolute';
+    parameterPanel.style.top = '20px';
+    parameterPanel.style.left = '20px';
+    parameterPanel.style.width = '220px';
+    parameterPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    parameterPanel.style.color = 'white';
+    parameterPanel.style.fontFamily = 'Arial, sans-serif';
+    parameterPanel.style.borderRadius = '5px';
+    parameterPanel.style.zIndex = '999';
+    parameterPanel.style.padding = '15px';
+    parameterPanel.style.transition = 'opacity 0.5s';
+    parameterPanel.style.opacity = '0';
+    
+    // Add title to parameter panel
+    const paramTitle = document.createElement('div');
+    paramTitle.textContent = 'SIMULATION CONTROLS';
+    paramTitle.style.textAlign = 'center';
+    paramTitle.style.fontWeight = 'bold';
+    paramTitle.style.marginBottom = '10px';
+    paramTitle.style.color = '#4a90e2';
+    parameterPanel.appendChild(paramTitle);
+    
+    document.body.appendChild(parameterPanel);
+    
+    // Create gesture panel (right side)
+    const gesturePanel = document.createElement('div');
+    gesturePanel.id = 'gesture-panel';
+    gesturePanel.style.position = 'absolute';
+    gesturePanel.style.top = '20px';
+    gesturePanel.style.right = '20px';
+    gesturePanel.style.width = '220px';
+    gesturePanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    gesturePanel.style.color = 'white';
+    gesturePanel.style.fontFamily = 'Arial, sans-serif';
+    gesturePanel.style.borderRadius = '5px';
+    gesturePanel.style.zIndex = '999';
+    gesturePanel.style.padding = '15px';
+    gesturePanel.style.transition = 'opacity 0.5s';
+    gesturePanel.style.opacity = '0';
+    
+    // Add title to gesture panel
+    const gestureTitle = document.createElement('div');
+    gestureTitle.textContent = 'GESTURE CONTROLS';
+    gestureTitle.style.textAlign = 'center';
+    gestureTitle.style.fontWeight = 'bold';
+    gestureTitle.style.marginBottom = '10px';
+    gestureTitle.style.color = '#e24a4a';
+    gesturePanel.appendChild(gestureTitle);
+    
+    document.body.appendChild(gesturePanel);
+    
+    // Add CSS for parameter and gesture displays
+    const style = document.createElement('style');
+    style.textContent = `
+      .param-display, .gesture-display {
+        margin-bottom: 12px;
+      }
+      .param-name, .gesture-name {
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .param-value-bar, .gesture-value-bar {
+        height: 8px;
+        background-color: #333;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 2px;
+      }
+      .param-value-fill {
+        height: 100%;
+        background-color: #4a90e2;
+        border-radius: 4px;
+      }
+      .gesture-value-fill {
+        height: 100%;
+        background-color: #e24a4a;
+        border-radius: 4px;
+      }
+      .param-value-text, .gesture-value-text {
+        font-size: 10px;
+        text-align: right;
+      }
+    `;
+    document.head.appendChild(style);
   }
   
   // Update status bar with current state
@@ -784,19 +927,21 @@ new p5((p) => {
     // Update HTML UI elements
     updateSettingsUI();
     
-    // Update parameter change notification
+    // Update parameter panels
     if (paramChangeTimer > 0) {
       paramChangeTimer--;
       
       // Fade out when timer is low
       if (paramChangeTimer < 30) {
-        const notification = document.getElementById('param-change-notification');
-        if (notification) {
-          notification.style.opacity = paramChangeTimer / 30;
-          
-          if (paramChangeTimer === 0) {
-            notification.style.display = 'none';
-          }
+        const paramPanel = document.getElementById('parameter-panel');
+        const gesturePanel = document.getElementById('gesture-panel');
+        
+        if (paramPanel) {
+          paramPanel.style.opacity = paramChangeTimer / 30;
+        }
+        
+        if (gesturePanel) {
+          gesturePanel.style.opacity = paramChangeTimer / 30;
         }
       }
     }
