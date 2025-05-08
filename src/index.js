@@ -800,10 +800,34 @@ new p5((p) => {
     }
   }
   
+  // Draw XYZ axes for orientation
+  function drawAxes() {
+    const axisLength = 200;
+    p.strokeWeight(2);
+    
+    // X axis - Red
+    p.stroke(255, 0, 0);
+    p.line(0, 0, 0, axisLength, 0, 0);
+    
+    // Y axis - Green
+    p.stroke(0, 255, 0);
+    p.line(0, 0, 0, 0, -axisLength, 0);
+    
+    // Z axis - Blue
+    p.stroke(0, 0, 255);
+    p.line(0, 0, 0, 0, 0, axisLength);
+    
+    // Reset stroke
+    p.strokeWeight(1);
+  }
+  
   // Draw the organic model
   function drawOrganicModel() {
     // Draw terrain
     drawTerrain();
+    
+    // Draw axes for orientation
+    drawAxes();
     
     // Draw connections
     p.stroke(255, 100);
