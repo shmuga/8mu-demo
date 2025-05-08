@@ -19,7 +19,7 @@ new p5((p) => {
       'Speed', 
       'Complexity', 
       'Color Hue', 
-      'Brightness', 
+      'Randomness', // Changed from Brightness to Randomness
       'Particle Density', 
       'Connection Density', 
       'Terrain Height',
@@ -300,6 +300,55 @@ new p5((p) => {
     }
   }
   
+  // Check if a particle collides with the terrain
+  function checkTerrainCollision(particle) {
+    const terrain = organicModel.terrain;
+    const resolution = organicModel.terrainResolution;
+    const size = organicModel.terrainSize;
+    
+    // Convert particle position to terrain grid coordinates
+    const gridX = Math.floor(p.map(particle.position.x, -size/2, size/2, 0, resolution-1));
+    const gridZ = Math.floor(p.map(particle.position.z, -size/2, size/2, 0, resolution-1));
+    
+    // Check if particle is within terrain bounds
+    if (gridX >= 0 && gridX < resolution-1 && gridZ >= 0 && gridZ < resolution-1) {
+      // Get the four terrain points around the particle
+      const p00 = terrain[gridX][gridZ].position;
+      const p10 = terrain[gridX+1][gridZ].position;
+      const p01 = terrain[gridX][gridZ+1].position;
+      const p11 = terrain[gridX+1][gridZ+1].position;
+      
+      // Interpolate to find the exact terrain height at particle's xz position
+      const xRatio = p.map(particle.position.x, p00.x, p10.x, 0, 1);
+      const zRatio = p.map(particle.position.z, p00.z, p01.z, 0, 1);
+      
+      const h1 = p.lerp(p00.y, p10.y, xRatio);
+      const h2 = p.lerp(p01.y, p11.y, xRatio);
+      const terrainHeight = p.lerp(h1, h2, zRatio);
+      
+      // Calculate surface normal for bounce reflection
+      const v1 = p5.Vector.sub(p10, p00);
+      const v2 = p5.Vector.sub(p01, p00);
+      const normal = v1.cross(v2).normalize();
+      
+      // Check if particle is below terrain surface (with a small buffer for particle size)
+      if (particle.position.y < terrainHeight + particle.size * 0.5) {
+        return {
+          collision: true,
+          normal: normal,
+          terrainHeight: terrainHeight
+        };
+      }
+    }
+    
+    // No collision
+    return {
+      collision: false,
+      normal: p.createVector(0, 1, 0),
+      terrainHeight: -Infinity
+    };
+  }
+  
   // Initialize the organic model
   function initOrganicModel() {
     // Generate terrain first
@@ -341,7 +390,7 @@ new p5((p) => {
     const speed = p.map(midiParams.smoothedValues[1], 0, 1, 0.1, 2);
     const complexity = p.map(midiParams.smoothedValues[2], 0, 1, 0.5, 3);
     const colorHue = p.map(midiParams.smoothedValues[3], 0, 1, 0, 360);
-    const brightness = p.map(midiParams.smoothedValues[4], 0, 1, 0.2, 1);
+    const randomness = p.map(midiParams.smoothedValues[4], 0, 1, 0.01, 0.2); // Brightness now controls randomness
     const particleDensity = p.map(midiParams.smoothedValues[5], 0, 1, 0.2, 1);
     const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0.2, 1);
     const terrainHeight = p.map(midiParams.smoothedValues[7], 0, 1, 20, 200);
@@ -395,12 +444,12 @@ new p5((p) => {
     for (let i = 0; i < organicModel.particles.length; i++) {
       const particle = organicModel.particles[i];
       
-      // Apply turbulence
+      // Apply turbulence with randomness parameter
       particle.velocity.add(
         p.createVector(
-          p.random(-turbulence, turbulence),
-          p.random(-turbulence, turbulence),
-          p.random(-turbulence, turbulence)
+          p.random(-turbulence - randomness, turbulence + randomness),
+          p.random(-turbulence - randomness, turbulence + randomness),
+          p.random(-turbulence - randomness, turbulence + randomness)
         )
       );
       
@@ -431,9 +480,31 @@ new p5((p) => {
       
       particle.velocity.add(elasticForce);
       
+      // Add random movement based on randomness parameter
+      if (randomness > 0.05) {
+        // Add more chaotic movement when randomness is high
+        const randomForce = p.createVector(
+          p.random(-1, 1),
+          p.random(-1, 1),
+          p.random(-1, 1)
+        ).normalize().mult(randomness * 2);
+        
+        particle.velocity.add(randomForce);
+      }
+      
       // Update position
       particle.velocity.mult(0.98); // Damping
       particle.position.add(p5.Vector.mult(particle.velocity, speed));
+      
+      // Check for collision with terrain and bounce
+      const terrainCollision = checkTerrainCollision(particle);
+      if (terrainCollision.collision) {
+        // Bounce off the terrain surface
+        const bounceForce = terrainCollision.normal.mult(0.2);
+        particle.velocity.reflect(terrainCollision.normal);
+        particle.velocity.mult(0.8); // Reduce velocity after bounce
+        particle.position.add(bounceForce); // Push away from surface
+      }
       
       // Update size and color
       particle.size = p.random(5, 15) * size;
@@ -443,7 +514,7 @@ new p5((p) => {
       particle.color = p.color(
         (colorHue + i * complexity) % 360,
         70,
-        brightness * 100,
+        80, // Fixed brightness value since we're using the parameter for randomness
         200
       );
       p.colorMode(p.RGB, 255, 255, 255, 255);
