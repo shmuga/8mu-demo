@@ -196,12 +196,40 @@ new p5((p) => {
       organicModel.terrainHeight/2
     );
     
+    // Generate a fixed size based on position for stability
+    const sizeNoise = p.noise(x * 0.05, z * 0.05);
+    const fixedSize = p.map(sizeNoise, 0, 1, 4, 12);
+    
+    // Generate a stable color based on position
+    const hue = p.map(p.noise(x * 0.02, z * 0.02), 0, 1, 0, 360);
+    const sat = p.map(p.noise(x * 0.03, y * 0.03), 0, 1, 50, 80);
+    const bri = p.map(p.noise(y * 0.02, z * 0.02), 0, 1, 60, 90);
+    
+    p.colorMode(p.HSB, 360, 100, 100, 255);
+    const stableColor = p.color(hue, sat, bri, 200);
+    p.colorMode(p.RGB, 255, 255, 255, 255);
+    
+    // Create control points for Bezier motion
+    const controlPoints = [];
+    for (let i = 0; i < 4; i++) {
+      controlPoints.push({
+        x: x + p.random(-50, 50),
+        y: y + p.random(-30, 30),
+        z: z + p.random(-50, 50)
+      });
+    }
+    
     return {
       position: p.createVector(x, y, z),
       velocity: p.createVector(p.random(-0.5, 0.5), p.random(-0.2, 0.2), p.random(-0.5, 0.5)),
-      size: p.random(3, 10),
-      color: p.color(p.random(255), p.random(255), p.random(255), 200),
-      originalPosition: p.createVector(x, y, z)
+      size: fixedSize,
+      fixedSize: fixedSize, // Store the fixed size to prevent animation
+      color: stableColor,
+      originalPosition: p.createVector(x, y, z),
+      controlPoints: controlPoints,
+      bezierT: 0, // Parameter for Bezier curve (0-1)
+      bezierDirection: 1, // Direction of movement along curve
+      noiseOffset: p.random(1000) // Unique offset for Perlin noise
     };
   }
   
@@ -513,18 +541,45 @@ new p5((p) => {
         particle.position.add(bounceForce); // Push away from surface
       }
       
-      // Update size and color
-      particle.size = p.random(5, 15) * size;
+      // Use fixed size with global size parameter
+      particle.size = particle.fixedSize * size;
       
-      // Use HSB color mode for easier control
-      p.colorMode(p.HSB, 360, 100, 100, 255);
-      particle.color = p.color(
-        (colorHue + i * complexity) % 360,
-        70,
-        80, // Fixed brightness value since we're using the parameter for randomness
-        200
-      );
-      p.colorMode(p.RGB, 255, 255, 255, 255);
+      // Apply Bezier curve motion
+      particle.bezierT += 0.002 * speed * particle.bezierDirection;
+      
+      // Reverse direction at endpoints
+      if (particle.bezierT > 1 || particle.bezierT < 0) {
+        particle.bezierDirection *= -1;
+      }
+      
+      // Constrain bezierT between 0 and 1
+      particle.bezierT = p.constrain(particle.bezierT, 0, 1);
+      
+      // Calculate position along Bezier curve
+      if (Math.random() < 0.05) { // Only occasionally use Bezier to allow other forces to work
+        const cp = particle.controlPoints;
+        const t = particle.bezierT;
+        
+        // Cubic Bezier formula
+        const bx = p.bezierPoint(cp[0].x, cp[1].x, cp[2].x, cp[3].x, t);
+        const by = p.bezierPoint(cp[0].y, cp[1].y, cp[2].y, cp[3].y, t);
+        const bz = p.bezierPoint(cp[0].z, cp[1].z, cp[2].z, cp[3].z, t);
+        
+        // Gradually move toward the Bezier point
+        particle.position.x = p.lerp(particle.position.x, bx, 0.03);
+        particle.position.y = p.lerp(particle.position.y, by, 0.03);
+        particle.position.z = p.lerp(particle.position.z, bz, 0.03);
+      }
+      
+      // Apply 3D Perlin noise for more natural movement
+      const noiseTime = p.frameCount * 0.01;
+      const noiseX = p.noise(particle.noiseOffset, noiseTime) - 0.5;
+      const noiseY = p.noise(particle.noiseOffset + 100, noiseTime) - 0.5;
+      const noiseZ = p.noise(particle.noiseOffset + 200, noiseTime) - 0.5;
+      
+      particle.position.x += noiseX * randomness;
+      particle.position.y += noiseY * randomness;
+      particle.position.z += noiseZ * randomness;
     }
     
     // Apply connection constraints
@@ -564,12 +619,20 @@ new p5((p) => {
       );
     }
     
-    // Draw particles
+    // Draw particles as enhanced spheres
     p.noStroke();
     for (const particle of organicModel.particles) {
       p.push();
       p.translate(particle.position.x, particle.position.y, particle.position.z);
+      
+      // Use the stable color
       p.fill(particle.color);
+      
+      // Add specular highlight for more 3D appearance
+      p.specularMaterial(250);
+      p.shininess(50);
+      
+      // Draw the sphere with fixed size
       p.sphere(particle.size);
       p.pop();
     }
@@ -960,6 +1023,11 @@ new p5((p) => {
   
   p.setup = () => {
     p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
+    
+    // Enable smooth rendering and better lighting for spheres
+    p.setAttributes('antialias', true);
+    p.smooth();
+    
     initMidi();
     initOrganicModel();
     createSettingsUI();
@@ -970,10 +1038,14 @@ new p5((p) => {
   p.draw = () => {
     p.background(20);
     
-    // Enable lighting for 3D
+    // Enhanced lighting for better 3D appearance
     p.ambientLight(60, 60, 60);
     p.pointLight(255, 255, 255, 0, 0, 300);
     p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
+    p.specularColor(255, 255, 255);
+    
+    // Add a second light source for better sphere rendering
+    p.pointLight(180, 180, 220, -300, 200, 300);
     
     // Create a camera view that can rotate 360 degrees in all directions
     let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
