@@ -19,18 +19,22 @@ new p5((p) => {
       'Brightness', 
       'Turbulence', 
       'Elasticity', 
-      'Gravity'
+      'Terrain Height'
     ]
   };
   
   // Organic model parameters
   let organicModel = {
     particles: [],
-    numParticles: 50,
+    numParticles: 150, // Increased number of particles for more detail
     connections: [],
     centerX: 0,
     centerY: 0,
-    centerZ: 0
+    centerZ: 0,
+    terrain: [], // Add terrain data for landscape
+    terrainResolution: 30, // Resolution of the terrain grid
+    terrainSize: 500, // Size of the terrain
+    terrainHeight: 100 // Maximum height of terrain features
   };
   
   // Initialize WebMidi
@@ -62,18 +66,23 @@ new p5((p) => {
   
   // Create a particle for the organic model
   function createParticle() {
-    const radius = p.random(50, 150);
-    const theta = p.random(0, p.TWO_PI);
-    const phi = p.random(0, p.PI);
+    // Create particles in a more landscape-like distribution
+    const x = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
+    const z = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
     
-    const x = radius * p.sin(phi) * p.cos(theta);
-    const y = radius * p.sin(phi) * p.sin(theta);
-    const z = radius * p.cos(phi);
+    // Use Perlin noise to create natural-looking height variations
+    const noiseScale = 0.01;
+    const y = p.map(
+      p.noise(x * noiseScale, z * noiseScale), 
+      0, 1, 
+      -organicModel.terrainHeight/2, 
+      organicModel.terrainHeight/2
+    );
     
     return {
       position: p.createVector(x, y, z),
-      velocity: p.createVector(p.random(-1, 1), p.random(-1, 1), p.random(-1, 1)).mult(0.5),
-      size: p.random(5, 15),
+      velocity: p.createVector(p.random(-0.5, 0.5), p.random(-0.2, 0.2), p.random(-0.5, 0.5)),
+      size: p.random(3, 10),
       color: p.color(p.random(255), p.random(255), p.random(255), 200),
       originalPosition: p.createVector(x, y, z)
     };
@@ -113,12 +122,78 @@ new p5((p) => {
     return connections;
   }
   
+  // Generate terrain mesh
+  function generateTerrain() {
+    const terrain = [];
+    const resolution = organicModel.terrainResolution;
+    const size = organicModel.terrainSize;
+    const noiseScale = 0.02;
+    
+    for (let x = 0; x < resolution; x++) {
+      terrain[x] = [];
+      for (let z = 0; z < resolution; z++) {
+        const xPos = p.map(x, 0, resolution-1, -size/2, size/2);
+        const zPos = p.map(z, 0, resolution-1, -size/2, size/2);
+        
+        // Use multiple layers of noise for more interesting terrain
+        const baseNoise = p.noise(xPos * noiseScale, zPos * noiseScale);
+        const detailNoise = p.noise(xPos * noiseScale * 3, zPos * noiseScale * 3) * 0.3;
+        
+        const height = p.map(
+          baseNoise + detailNoise, 
+          0, 1.3, 
+          -organicModel.terrainHeight/2, 
+          organicModel.terrainHeight/2
+        );
+        
+        terrain[x][z] = {
+          position: p.createVector(xPos, height, zPos),
+          color: getTerrainColor(height, organicModel.terrainHeight)
+        };
+      }
+    }
+    
+    return terrain;
+  }
+  
+  // Get color based on terrain height (like a topographic map)
+  function getTerrainColor(height, maxHeight) {
+    p.colorMode(p.HSB, 360, 100, 100, 255);
+    
+    // Water (blue)
+    if (height < -maxHeight * 0.3) {
+      return p.color(240, 70, 80, 200);
+    }
+    // Beach/lowlands (yellow/tan)
+    else if (height < -maxHeight * 0.1) {
+      return p.color(50, 60, 90, 200);
+    }
+    // Plains/grasslands (green)
+    else if (height < maxHeight * 0.2) {
+      return p.color(120, 60, 70, 200);
+    }
+    // Hills (darker green)
+    else if (height < maxHeight * 0.4) {
+      return p.color(140, 70, 50, 200);
+    }
+    // Mountains (brown/gray)
+    else {
+      return p.color(30, 30, 60, 200);
+    }
+  }
+  
   // Initialize the organic model
   function initOrganicModel() {
+    // Generate terrain first
+    organicModel.terrain = generateTerrain();
+    
+    // Create particles
     organicModel.particles = [];
     for (let i = 0; i < organicModel.numParticles; i++) {
       organicModel.particles.push(createParticle());
     }
+    
+    // Create connections between particles
     organicModel.connections = createConnections();
   }
   
@@ -133,7 +208,13 @@ new p5((p) => {
     const brightness = p.map(midiParams.faderValues[4], 0, 1, 0.2, 1);
     const turbulence = p.map(midiParams.faderValues[5], 0, 1, 0, 0.1);
     const elasticity = p.map(midiParams.faderValues[6], 0, 1, 0.01, 0.1);
-    const gravity = p.map(midiParams.faderValues[7], 0, 1, 0, 0.05);
+    const terrainHeight = p.map(midiParams.faderValues[7], 0, 1, 20, 200);
+    
+    // Update terrain height based on MIDI control
+    if (Math.abs(organicModel.terrainHeight - terrainHeight) > 5) {
+      organicModel.terrainHeight = terrainHeight;
+      organicModel.terrain = generateTerrain();
+    }
     
     // Update particles
     for (let i = 0; i < organicModel.particles.length; i++) {
@@ -205,7 +286,10 @@ new p5((p) => {
     p.push();
     p.translate(p.width/2, p.height/2, 0);
     
-    // Draw connections first
+    // Draw terrain
+    drawTerrain();
+    
+    // Draw connections
     p.stroke(255, 100);
     p.strokeWeight(1);
     
@@ -230,6 +314,70 @@ new p5((p) => {
     }
     
     p.pop();
+  }
+  
+  // Draw the terrain mesh
+  function drawTerrain() {
+    const terrain = organicModel.terrain;
+    const resolution = organicModel.terrainResolution;
+    
+    // Draw terrain as triangles
+    for (let x = 0; x < resolution-1; x++) {
+      for (let z = 0; z < resolution-1; z++) {
+        // Each grid cell is made of two triangles
+        p.beginShape(p.TRIANGLES);
+        
+        // First triangle
+        p.fill(terrain[x][z].color);
+        p.vertex(
+          terrain[x][z].position.x,
+          terrain[x][z].position.y,
+          terrain[x][z].position.z
+        );
+        
+        p.fill(terrain[x+1][z].color);
+        p.vertex(
+          terrain[x+1][z].position.x,
+          terrain[x+1][z].position.y,
+          terrain[x+1][z].position.z
+        );
+        
+        p.fill(terrain[x][z+1].color);
+        p.vertex(
+          terrain[x][z+1].position.x,
+          terrain[x][z+1].position.y,
+          terrain[x][z+1].position.z
+        );
+        
+        p.endShape();
+        
+        // Second triangle
+        p.beginShape(p.TRIANGLES);
+        
+        p.fill(terrain[x+1][z].color);
+        p.vertex(
+          terrain[x+1][z].position.x,
+          terrain[x+1][z].position.y,
+          terrain[x+1][z].position.z
+        );
+        
+        p.fill(terrain[x+1][z+1].color);
+        p.vertex(
+          terrain[x+1][z+1].position.x,
+          terrain[x+1][z+1].position.y,
+          terrain[x+1][z+1].position.z
+        );
+        
+        p.fill(terrain[x][z+1].color);
+        p.vertex(
+          terrain[x][z+1].position.x,
+          terrain[x][z+1].position.y,
+          terrain[x][z+1].position.z
+        );
+        
+        p.endShape();
+      }
+    }
   }
   
   // Draw the settings UI
@@ -322,10 +470,19 @@ new p5((p) => {
     // Enable lighting for 3D
     p.ambientLight(60, 60, 60);
     p.pointLight(255, 255, 255, 0, 0, 300);
+    p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
     
-    // Rotate the view slightly for better 3D perception
-    p.rotateX(p.frameCount * 0.005);
-    p.rotateY(p.frameCount * 0.003);
+    // Create a camera view that looks at the landscape from an angle
+    const camRadius = 800;
+    const camX = camRadius * Math.sin(p.frameCount * 0.001);
+    const camZ = camRadius * Math.cos(p.frameCount * 0.001);
+    const camY = 300;
+    
+    p.camera(
+      camX, camY, camZ,  // Camera position
+      0, 0, 0,           // Look at center
+      0, 1, 0            // Up vector
+    );
     
     updateOrganicModel();
     drawOrganicModel();
