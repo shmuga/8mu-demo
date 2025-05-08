@@ -58,12 +58,12 @@ new p5((p) => {
   
   // Camera parameters
   let cameraParams = {
-    radius: 1200,
-    height: 600, // Lower height for more top-down view
+    radius: 100,
+    height: -100, // Lower height for more top-down view
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
     tiltAngle: Math.PI * 0.25, // 45 degrees for 2.5D view
-    liftAngle: 0,
+    liftAngle: Math.PI *2,
     rotationOffset: Math.PI * 0.25, // Start at 45 degrees
     orbitAngle: Math.PI * 0.25 // 45 degrees for 2.5D view
   };
@@ -525,11 +525,10 @@ new p5((p) => {
     const rotateRight = midiParams.smoothedValues[12];
     const rotateLeft = midiParams.smoothedValues[13];
     
-    // Calculate net tilt (front-back) - accumulate for continuous rotation
-    // Make movement more responsive when value is higher
-    const tiltDelta = p.map(tiltFront - tiltBack, -1, 1, -0.01, 0.01) * 
-      (1 + Math.max(tiltFront, tiltBack) * 3); // Accelerate based on value
-    cameraParams.tiltAngle += tiltDelta;
+    // Calculate tilt (front-back) - move camera in a single plane
+    // Map the tilt values directly to an angle range instead of accumulating
+    const tiltValue = p.map(tiltFront - tiltBack, -1, 1, -Math.PI/4, Math.PI/4);
+    cameraParams.tiltAngle = tiltValue;
     
     // Calculate net lift (right-left) - accumulate for continuous rotation
     // Make movement more responsive when value is higher
@@ -1278,13 +1277,16 @@ new p5((p) => {
     let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
     horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls
     
-    // Calculate camera position for 2.5D view (isometric-like)
-    const verticalAngle = cameraParams.orbitAngle;
+    // Calculate camera position for 2.5D view with tilt in a single plane
+    // Use tiltAngle to adjust the camera height and distance
+    const baseHeight = cameraParams.height;
+    const adjustedHeight = baseHeight * Math.cos(cameraParams.tiltAngle);
+    const forwardOffset = baseHeight * Math.sin(cameraParams.tiltAngle);
     
     // Convert to Cartesian coordinates with adjusted angles for 2.5D view
-    const camX = cameraParams.radius * Math.cos(verticalAngle) * Math.sin(horizontalAngle);
-    const camY = cameraParams.height; // Fixed height for consistent top-down component
-    const camZ = cameraParams.radius * Math.cos(verticalAngle) * Math.cos(horizontalAngle);
+    const camX = cameraParams.radius * Math.sin(horizontalAngle) + forwardOffset * Math.sin(horizontalAngle);
+    const camY = adjustedHeight; // Height adjusted by tilt
+    const camZ = cameraParams.radius * Math.cos(horizontalAngle) + forwardOffset * Math.cos(horizontalAngle);
     
     // Apply additional lift adjustment
     const liftAxis = p.createVector(
