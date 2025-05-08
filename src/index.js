@@ -129,18 +129,37 @@ new p5((p) => {
     if (panel) {
       const paramName = midiParams.paramNames[paramIndex];
       const valuePercent = Math.round(value * 100);
+      const ccValue = midiParams.faderMappings[paramIndex];
       
       // Update or create the parameter display
       let paramDisplay = document.getElementById(`param-display-${paramIndex}`);
       if (!paramDisplay) {
+        // Create new display element
         paramDisplay = document.createElement('div');
         paramDisplay.id = `param-display-${paramIndex}`;
         paramDisplay.className = 'param-display';
-        panel.appendChild(paramDisplay);
+        paramDisplay.dataset.ccValue = ccValue; // Store CC value for sorting
+        
+        // Insert in sorted order based on CC value
+        let inserted = false;
+        Array.from(panel.children).forEach((child, index) => {
+          if (index === 0) return; // Skip the title element
+          
+          const childCcValue = parseInt(child.dataset.ccValue || '0');
+          if (!inserted && ccValue < childCcValue) {
+            panel.insertBefore(paramDisplay, child);
+            inserted = true;
+          }
+        });
+        
+        // If not inserted, append to the end
+        if (!inserted) {
+          panel.appendChild(paramDisplay);
+        }
       }
       
       paramDisplay.innerHTML = `
-        <div class="param-name">${paramName}</div>
+        <div class="param-name">${paramName} (CC ${ccValue})</div>
         <div class="param-value-bar">
           <div class="param-value-fill" style="width: ${valuePercent}%"></div>
         </div>
@@ -158,18 +177,37 @@ new p5((p) => {
     if (panel) {
       const paramName = midiParams.paramNames[paramIndex];
       const valuePercent = Math.round(value * 100);
+      const ccValue = midiParams.faderMappings[paramIndex];
       
       // Update or create the gesture display
       let gestureDisplay = document.getElementById(`gesture-display-${paramIndex}`);
       if (!gestureDisplay) {
+        // Create new display element
         gestureDisplay = document.createElement('div');
         gestureDisplay.id = `gesture-display-${paramIndex}`;
         gestureDisplay.className = 'gesture-display';
-        panel.appendChild(gestureDisplay);
+        gestureDisplay.dataset.ccValue = ccValue; // Store CC value for sorting
+        
+        // Insert in sorted order based on CC value
+        let inserted = false;
+        Array.from(panel.children).forEach((child, index) => {
+          if (index === 0) return; // Skip the title element
+          
+          const childCcValue = parseInt(child.dataset.ccValue || '0');
+          if (!inserted && ccValue < childCcValue) {
+            panel.insertBefore(gestureDisplay, child);
+            inserted = true;
+          }
+        });
+        
+        // If not inserted, append to the end
+        if (!inserted) {
+          panel.appendChild(gestureDisplay);
+        }
       }
       
       gestureDisplay.innerHTML = `
-        <div class="gesture-name">${paramName}</div>
+        <div class="gesture-name">${paramName} (CC ${ccValue})</div>
         <div class="gesture-value-bar">
           <div class="gesture-value-fill" style="width: ${valuePercent}%"></div>
         </div>
@@ -923,7 +961,7 @@ new p5((p) => {
     parameterPanel.style.position = 'absolute';
     parameterPanel.style.top = '20px';
     parameterPanel.style.left = '20px';
-    parameterPanel.style.width = '220px';
+    parameterPanel.style.width = '250px';
     parameterPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     parameterPanel.style.color = 'white';
     parameterPanel.style.fontFamily = 'Arial, sans-serif';
@@ -950,7 +988,7 @@ new p5((p) => {
     gesturePanel.style.position = 'absolute';
     gesturePanel.style.top = '20px';
     gesturePanel.style.right = '20px';
-    gesturePanel.style.width = '220px';
+    gesturePanel.style.width = '250px';
     gesturePanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
     gesturePanel.style.color = 'white';
     gesturePanel.style.fontFamily = 'Arial, sans-serif';
@@ -980,6 +1018,9 @@ new p5((p) => {
       .param-name, .gesture-name {
         font-size: 12px;
         margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .param-value-bar, .gesture-value-bar {
         height: 8px;
