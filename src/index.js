@@ -61,7 +61,8 @@ new p5((p) => {
     rotationSpeed: 0.001,
     tiltAngle: 0,
     liftAngle: 0,
-    rotationOffset: 0
+    rotationOffset: 0,
+    orbitAngle: 0 // New parameter for vertical orbit
   };
   
   // Force parameters
@@ -403,14 +404,20 @@ new p5((p) => {
     const rotateRight = midiParams.smoothedValues[12];
     const rotateLeft = midiParams.smoothedValues[13];
     
-    // Calculate net tilt (front-back)
-    cameraParams.tiltAngle = p.map(tiltFront - tiltBack, -1, 1, -0.5, 0.5);
+    // Calculate net tilt (front-back) - accumulate for continuous rotation
+    const tiltDelta = p.map(tiltFront - tiltBack, -1, 1, -0.01, 0.01);
+    cameraParams.tiltAngle += tiltDelta;
     
-    // Calculate net lift (right-left)
-    cameraParams.liftAngle = p.map(liftRight - liftLeft, -1, 1, -0.5, 0.5);
+    // Calculate net lift (right-left) - accumulate for continuous rotation
+    const liftDelta = p.map(liftRight - liftLeft, -1, 1, -0.01, 0.01);
+    cameraParams.liftAngle += liftDelta;
     
-    // Calculate rotation offset (right-left)
-    cameraParams.rotationOffset = p.map(rotateRight - rotateLeft, -1, 1, -0.5, 0.5);
+    // Calculate rotation offset (right-left) - accumulate for continuous rotation
+    const rotationDelta = p.map(rotateRight - rotateLeft, -1, 1, -0.01, 0.01);
+    cameraParams.rotationOffset += rotationDelta;
+    
+    // Update orbit angle for vertical rotation
+    cameraParams.orbitAngle = cameraParams.tiltAngle;
     
     // Update force parameters
     forceParams.vortexStrength = p.map(tiltFront + tiltBack, 0, 2, 0, 0.05);
@@ -968,23 +975,32 @@ new p5((p) => {
     p.pointLight(255, 255, 255, 0, 0, 300);
     p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
     
-    // Create a camera view that looks at the landscape from a 45-degree angle
-    let camAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
-    camAngle += cameraParams.rotationOffset; // Add rotation from MIDI controls
+    // Create a camera view that can rotate 360 degrees in all directions
+    let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
+    horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls
     
-    // Position camera at 45-degree angle to see the whole surface
-    const camX = cameraParams.radius * Math.sin(camAngle);
-    const camZ = cameraParams.radius * Math.cos(camAngle);
+    // Calculate camera position using spherical coordinates for full 360-degree movement
+    const verticalAngle = cameraParams.orbitAngle;
     
-    // Apply tilt and lift adjustments
-    const camY = cameraParams.height + (cameraParams.tiltAngle * cameraParams.radius);
-    const camXOffset = cameraParams.liftAngle * cameraParams.radius * 0.5;
-    const camZOffset = cameraParams.liftAngle * cameraParams.radius * 0.5;
+    // Convert spherical to Cartesian coordinates
+    const camX = cameraParams.radius * Math.cos(verticalAngle) * Math.sin(horizontalAngle);
+    const camY = cameraParams.radius * Math.sin(verticalAngle);
+    const camZ = cameraParams.radius * Math.cos(verticalAngle) * Math.cos(horizontalAngle);
+    
+    // Apply additional lift adjustment
+    const liftAxis = p.createVector(
+      Math.cos(horizontalAngle + Math.PI/2),
+      0,
+      Math.cos(horizontalAngle)
+    ).normalize();
+    
+    const liftAmount = cameraParams.liftAngle * cameraParams.radius * 0.5;
+    const liftOffset = p5.Vector.mult(liftAxis, liftAmount);
     
     p.camera(
-      camX + camXOffset, camY, camZ + camZOffset,  // Camera position
-      0, 0, 0,                                     // Look at center
-      0, 1, 0                                      // Up vector
+      camX + liftOffset.x, camY + liftOffset.y, camZ + liftOffset.z,  // Camera position
+      0, 0, 0,                                                        // Look at center
+      0, 1, 0                                                         // Up vector
     );
     
     // Center the model at origin
