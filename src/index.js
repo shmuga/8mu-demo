@@ -46,7 +46,10 @@ new p5((p) => {
     terrainSize: 500, // Size of the terrain
     terrainHeight: 100, // Maximum height of terrain features
     particleDensity: 0.5, // Control particle density
-    connectionDensity: 0.5 // Control connection density
+    connectionDensity: 0.5, // Control connection density
+    particlesToAdd: [], // Queue of particles to add
+    particlesToRemove: [], // Queue of particles to remove
+    minParticles: 10 // Minimum number of particles before spawning more
   };
   
   // Physics parameters
@@ -220,19 +223,21 @@ new p5((p) => {
   }
   
   // Create a particle for the organic model
-  function createParticle() {
-    // Create particles in a more landscape-like distribution
-    const x = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
-    const z = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
-    
-    // Use Perlin noise to create natural-looking height variations
-    const noiseScale = 0.01;
-    const y = p.map(
-      p.noise(x * noiseScale, z * noiseScale), 
-      0, 1, 
-      -organicModel.terrainHeight/2, 
-      organicModel.terrainHeight/2
-    );
+  function createParticle(x, y, z) {
+    // If position is not provided, create random position
+    if (x === undefined || y === undefined || z === undefined) {
+      x = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
+      z = p.random(-organicModel.terrainSize/2, organicModel.terrainSize/2);
+      
+      // Use Perlin noise to create natural-looking height variations
+      const noiseScale = 0.01;
+      y = p.map(
+        p.noise(x * noiseScale, z * noiseScale), 
+        0, 1, 
+        -organicModel.terrainHeight/2, 
+        organicModel.terrainHeight/2
+      );
+    }
     
     // Generate a fixed size based on position for stability
     const sizeNoise = p.noise(x * 0.05, z * 0.05);
@@ -295,7 +300,9 @@ new p5((p) => {
       controlPoints: controlPoints,
       bezierT: 0, // Parameter for Bezier curve (0-1)
       bezierDirection: 1, // Direction of movement along curve
-      noiseOffset: p.random(1000) // Unique offset for Perlin noise
+      noiseOffset: p.random(1000), // Unique offset for Perlin noise
+      terrainHits: 0, // Count how many times this particle has hit the terrain
+      lastCollisionTime: 0 // Track when the last collision happened
     };
   }
   
@@ -567,6 +574,29 @@ new p5((p) => {
       }
     }
     
+    // Check for particle-particle collisions
+    const particleCollisions = [];
+    for (let i = 0; i < organicModel.particles.length; i++) {
+      for (let j = i + 1; j < organicModel.particles.length; j++) {
+        const particleA = organicModel.particles[i];
+        const particleB = organicModel.particles[j];
+        
+        // Calculate distance between particles
+        const distance = p5.Vector.dist(particleA.position, particleB.position);
+        
+        // If particles are colliding
+        if (distance < (particleA.size + particleB.size) * 0.8) {
+          // Mark both particles for removal if they haven't already been marked
+          if (!particleCollisions.includes(i) && !particleCollisions.includes(j)) {
+            particleCollisions.push(i, j);
+          }
+        }
+      }
+    }
+    
+    // Add collision particles to removal queue
+    organicModel.particlesToRemove.push(...particleCollisions);
+    
     // Update particles
     for (let i = 0; i < organicModel.particles.length; i++) {
       const particle = organicModel.particles[i];
@@ -626,6 +656,27 @@ new p5((p) => {
       // Check for collision with terrain and bounce
       const terrainCollision = checkTerrainCollision(particle);
       if (terrainCollision.collision) {
+        // Only count as a hit if enough time has passed since last hit (to avoid multiple hits in a row)
+        const currentTime = p.frameCount;
+        if (currentTime - particle.lastCollisionTime > 10) {
+          particle.terrainHits++;
+          particle.lastCollisionTime = currentTime;
+          
+          // If this is the first hit, create a new particle
+          if (particle.terrainHits === 1) {
+            // Create a new particle near this one with a slight offset
+            const newX = particle.position.x + p.random(-20, 20);
+            const newY = particle.position.y + p.random(10, 30);
+            const newZ = particle.position.z + p.random(-20, 20);
+            organicModel.particlesToAdd.push(createParticle(newX, newY, newZ));
+          }
+          
+          // If this particle has hit the terrain 5 times, mark it for removal
+          if (particle.terrainHits >= 5) {
+            organicModel.particlesToRemove.push(i);
+          }
+        }
+        
         // Calculate bounce with proper physics
         // First, move the particle to just above the terrain surface
         particle.position.y = terrainCollision.terrainHeight + particle.size * 0.5;
@@ -692,16 +743,60 @@ new p5((p) => {
       const particleA = organicModel.particles[connection.from];
       const particleB = organicModel.particles[connection.to];
       
-      const direction = p5.Vector.sub(particleB.position, particleA.position);
-      const distance = direction.mag();
-      
-      if (distance > connection.maxLength) {
-        direction.normalize();
-        const correction = p5.Vector.mult(direction, (distance - connection.maxLength) * connection.strength);
+      if (particleA && particleB) {
+        const direction = p5.Vector.sub(particleB.position, particleA.position);
+        const distance = direction.mag();
         
-        particleA.position.add(correction);
-        particleB.position.sub(correction);
+        if (distance > connection.maxLength) {
+          direction.normalize();
+          const correction = p5.Vector.mult(direction, (distance - connection.maxLength) * connection.strength);
+          
+          particleA.position.add(correction);
+          particleB.position.sub(correction);
+        }
       }
+    }
+    
+    // Add new particles from the queue
+    if (organicModel.particlesToAdd.length > 0) {
+      organicModel.particles.push(...organicModel.particlesToAdd);
+      organicModel.particlesToAdd = [];
+      
+      // Recreate connections when particles are added
+      organicModel.connections = createConnections();
+    }
+    
+    // Remove particles marked for deletion (in reverse order to avoid index issues)
+    if (organicModel.particlesToRemove.length > 0) {
+      // Sort indices in descending order
+      organicModel.particlesToRemove.sort((a, b) => b - a);
+      
+      // Remove duplicates
+      organicModel.particlesToRemove = [...new Set(organicModel.particlesToRemove)];
+      
+      // Remove particles
+      for (const index of organicModel.particlesToRemove) {
+        if (index >= 0 && index < organicModel.particles.length) {
+          organicModel.particles.splice(index, 1);
+        }
+      }
+      
+      // Clear the removal queue
+      organicModel.particlesToRemove = [];
+      
+      // Recreate connections when particles are removed
+      organicModel.connections = createConnections();
+    }
+    
+    // Check if we need to spawn more particles
+    if (organicModel.particles.length < organicModel.minParticles) {
+      const particlesToSpawn = organicModel.minParticles - organicModel.particles.length;
+      for (let i = 0; i < particlesToSpawn; i++) {
+        organicModel.particles.push(createParticle());
+      }
+      
+      // Recreate connections for new particles
+      organicModel.connections = createConnections();
     }
   }
   
