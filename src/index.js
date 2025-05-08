@@ -379,29 +379,29 @@ new p5((p) => {
     return terrain;
   }
   
-  // Get color based on terrain height with neutral, accessible colors
+  // Get color based on terrain height with lighter, neutral, accessible colors
   function getTerrainColor(height, maxHeight) {
     p.colorMode(p.HSB, 360, 100, 100, 255);
     
-    // Deep water (muted blue-gray)
+    // Deep water (lighter muted blue-gray)
     if (height < -maxHeight * 0.3) {
-      return p.color(210, 30, 50, 200);
+      return p.color(210, 20, 70, 180);
     }
-    // Shallow water (light gray-blue)
+    // Shallow water (very light gray-blue)
     else if (height < -maxHeight * 0.1) {
-      return p.color(200, 20, 70, 200);
+      return p.color(200, 15, 85, 180);
     }
-    // Low ground (light beige)
+    // Low ground (very light beige)
     else if (height < maxHeight * 0.2) {
-      return p.color(40, 20, 85, 200);
+      return p.color(40, 15, 95, 180);
     }
-    // Medium height (medium taupe)
+    // Medium height (light taupe)
     else if (height < maxHeight * 0.4) {
-      return p.color(35, 25, 65, 200);
+      return p.color(35, 15, 85, 180);
     }
-    // High ground (dark gray-brown)
+    // High ground (light gray-brown)
     else {
-      return p.color(30, 30, 45, 200);
+      return p.color(30, 20, 75, 180);
     }
   }
   
@@ -855,8 +855,8 @@ new p5((p) => {
     drawAxes();
     
     // Draw connections
-    p.stroke(255, 100);
-    p.strokeWeight(1);
+    p.stroke(0, 100);
+    p.strokeWeight(0.5);
     
     for (const connection of organicModel.connections) {
       const particleA = organicModel.particles[connection.from];
@@ -892,7 +892,10 @@ new p5((p) => {
     const terrain = organicModel.terrain;
     const resolution = organicModel.terrainResolution;
     
-    // Draw terrain as triangles
+    // Draw terrain as triangles with thin black stroke
+    p.strokeWeight(0.2);
+    p.stroke(0, 50);
+    
     for (let x = 0; x < resolution-1; x++) {
       for (let z = 0; z < resolution-1; z++) {
         // Each grid cell is made of two triangles
