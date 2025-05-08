@@ -55,14 +55,14 @@ new p5((p) => {
   
   // Camera parameters
   let cameraParams = {
-    radius: 1000,
-    height: 800, // Adjusted for 45-degree view
+    radius: 1200,
+    height: 600, // Lower height for more top-down view
     autoRotate: true,
-    rotationSpeed: 0.001,
-    tiltAngle: Math.PI, // Start flipped over (180 degrees)
+    rotationSpeed: 0.0005, // Slower rotation
+    tiltAngle: Math.PI * 0.25, // 45 degrees for 2.5D view
     liftAngle: 0,
-    rotationOffset: 0,
-    orbitAngle: Math.PI // Start flipped over (180 degrees)
+    rotationOffset: Math.PI * 0.25, // Start at 45 degrees
+    orbitAngle: Math.PI * 0.25 // 45 degrees for 2.5D view
   };
   
   // Force parameters
@@ -1127,16 +1127,16 @@ new p5((p) => {
     // Add a second light source for better sphere rendering
     p.pointLight(180, 180, 220, -300, 200, 300);
     
-    // Create a camera view that can rotate 360 degrees in all directions
+    // Create a camera view from a 2.5D angle
     let horizontalAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
     horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls
     
-    // Calculate camera position using spherical coordinates for full 360-degree movement
+    // Calculate camera position for 2.5D view (isometric-like)
     const verticalAngle = cameraParams.orbitAngle;
     
-    // Convert spherical to Cartesian coordinates
+    // Convert to Cartesian coordinates with adjusted angles for 2.5D view
     const camX = cameraParams.radius * Math.cos(verticalAngle) * Math.sin(horizontalAngle);
-    const camY = cameraParams.radius * Math.sin(verticalAngle);
+    const camY = cameraParams.height; // Fixed height for consistent top-down component
     const camZ = cameraParams.radius * Math.cos(verticalAngle) * Math.cos(horizontalAngle);
     
     // Apply additional lift adjustment
