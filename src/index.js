@@ -59,7 +59,7 @@ new p5((p) => {
   // Camera parameters
   let cameraParams = {
     radius: 100,
-    height: -100, // Lower height for more top-down view
+    height: 100, // Lower height for more top-down view
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
     tiltAngle: Math.PI * 0.25, // 45 degrees for 2.5D view
@@ -652,9 +652,28 @@ new p5((p) => {
       particle.velocity.mult(0.98); // Damping
       particle.position.add(p5.Vector.mult(particle.velocity, speed));
       
+      // Check if particle is going beyond terrain boundaries and wrap it to the other side
+      const terrainSize = organicModel.terrainSize;
+      const halfSize = terrainSize / 2;
+      
+      // Wrap around X axis
+      if (particle.position.x > halfSize) {
+        particle.position.x = -halfSize;
+      } else if (particle.position.x < -halfSize) {
+        particle.position.x = halfSize;
+      }
+      
+      // Wrap around Z axis
+      if (particle.position.z > halfSize) {
+        particle.position.z = -halfSize;
+      } else if (particle.position.z < -halfSize) {
+        particle.position.z = halfSize;
+      }
+      
       // Check for collision with terrain and bounce
       const terrainCollision = checkTerrainCollision(particle);
-      if (terrainCollision.collision) {
+      // Prevent particles from going below the terrain
+      if (terrainCollision.collision || particle.position.y < -organicModel.terrainHeight) {
         // Only count as a hit if enough time has passed since last hit (to avoid multiple hits in a row)
         const currentTime = p.frameCount;
         if (currentTime - particle.lastCollisionTime > 10) {
@@ -677,8 +696,8 @@ new p5((p) => {
         }
         
         // Calculate bounce with proper physics
-        // First, move the particle to just above the terrain surface
-        particle.position.y = terrainCollision.terrainHeight + particle.size * 0.5;
+        // First, move the particle to just above the terrain surface with a bit more clearance
+        particle.position.y = terrainCollision.terrainHeight + particle.size * 0.8;
         
         // Calculate reflection vector with some energy loss
         const bounciness = 0.7; // Higher values = more bouncy
@@ -810,7 +829,7 @@ new p5((p) => {
     
     // Y axis - Green
     p.stroke(0, 255, 0);
-    p.line(0, 0, 0, 0, -axisLength, 0);
+    p.line(0, 0, 0, 0, axisLength, 0);
     
     // Z axis - Blue
     p.stroke(0, 0, 255);
