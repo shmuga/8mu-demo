@@ -62,13 +62,13 @@ new p5((p) => {
     height: -200, // Higher position to look down
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
-    zRotation: 0, // Rotation around Z axis (tilt front/back)
+    zRotation: Math.PI, // Rotation around Z axis (tilt front/back) - 180 degrees
     xRotation: 0, // Rotation around X axis (lift right/left)
-    yRotation: Math.PI * 0.25, // Rotation around Y axis (rotate right/left)
+    yRotation: Math.PI * 1.25, // Rotation around Y axis (rotate right/left) - added 180 degrees
     mouseControl: false, // Flag to enable/disable mouse control
     mouseX: 0,
     mouseY: 0,
-    targetYRotation: Math.PI * 0.25
+    targetYRotation: Math.PI * 1.25 // Added 180 degrees
   };
   
   // Force parameters
@@ -830,17 +830,17 @@ new p5((p) => {
     const axisLength = 200;
     p.strokeWeight(2);
     
-    // X axis - Red
+    // X axis - Red (flipped for 180 degree rotation)
     p.stroke(255, 0, 0);
-    p.line(0, 0, 0, axisLength, 0, 0);
+    p.line(0, 0, 0, -axisLength, 0, 0);
     
     // Y axis - Green
     p.stroke(0, 255, 0);
     p.line(0, 0, 0, 0, axisLength, 0);
     
-    // Z axis - Blue
+    // Z axis - Blue (flipped for 180 degree rotation)
     p.stroke(0, 0, 255);
-    p.line(0, 0, 0, 0, 0, axisLength);
+    p.line(0, 0, 0, 0, 0, -axisLength);
     
     // Reset stroke
     p.strokeWeight(1);
@@ -1373,8 +1373,8 @@ new p5((p) => {
       : 0;
     baseAngle += cameraParams.yRotation; // Add Y rotation (around vertical axis)
     
-    // Start with base camera position
-    let camX = 0, camY = -cameraParams.height, camZ = -cameraParams.radius;
+    // Start with base camera position - rotated 180 degrees
+    let camX = 0, camY = -cameraParams.height, camZ = cameraParams.radius; // Inverted Z for 180 degree rotation
     
     // Create rotation matrices
     // First rotate around Y axis (horizontal rotation)
