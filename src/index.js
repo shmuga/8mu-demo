@@ -233,7 +233,7 @@ new p5((p) => {
       const gravityForce = p5.Vector.sub(
         p.createVector(0, 0, 0),
         particle.position
-      ).normalize().mult(gravity);
+      ).normalize().mult(p.map(midiParams.faderValues[7], 0, 1, 0, 0.05));
       
       particle.velocity.add(gravityForce);
       
