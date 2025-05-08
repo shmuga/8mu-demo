@@ -58,25 +58,23 @@ new p5((p) => {
   
   // Camera parameters
   let cameraParams = {
-    radius: 1000,
-    height: 1000, // Higher position to look down
+    radius: -300,
+    height: -200, // Higher position to look down
     autoRotate: true,
     rotationSpeed: 0.0005, // Slower rotation
-    tiltAngle: -Math.PI * 0.25, // Negative angle to look down
-    liftAngle: 0,
-    rotationOffset: Math.PI * 0.25, // Start at 45 degrees
-    orbitAngle: -Math.PI * 0.25, // Negative angle to look down
+    zRotation: 0, // Rotation around Z axis (tilt front/back)
+    xRotation: 0, // Rotation around X axis (lift right/left)
+    yRotation: Math.PI * 0.25, // Rotation around Y axis (rotate right/left)
     mouseControl: false, // Flag to enable/disable mouse control
     mouseX: 0,
     mouseY: 0,
-    targetRotation: Math.PI * 0.25,
-    targetTilt: -Math.PI * 0.25
+    targetYRotation: Math.PI * 0.25
   };
   
   // Force parameters
   let forceParams = {
     vortexStrength: 0,
-    gravityStrength: 0
+    gravityStrength: 10
   };
   
   // Initialize WebMidi
@@ -530,25 +528,29 @@ new p5((p) => {
     const rotateRight = midiParams.smoothedValues[12];
     const rotateLeft = midiParams.smoothedValues[13];
     
-    // Calculate tilt (front-back) - move camera in a single plane
-    // Map the tilt values directly to an angle range instead of accumulating
-    const tiltValue = p.map(tiltFront - tiltBack, -1, 1, -Math.PI/4, Math.PI/4);
-    cameraParams.tiltAngle = tiltValue;
+    // Calculate Z rotation (tilt front-back) - rotate around Z axis
+    const zRotationValue = p.map(tiltFront - tiltBack, -1, 1, -Math.PI/4, Math.PI/4);
+    cameraParams.zRotation = zRotationValue;
     
-    // Calculate net lift (right-left) - accumulate for continuous rotation
-    // Make movement more responsive when value is higher
-    const liftDelta = p.map(liftRight - liftLeft, -1, 1, -0.01, 0.01) * 
-      (1 + Math.max(liftRight, liftLeft) * 3); // Accelerate based on value
-    cameraParams.liftAngle += liftDelta;
+    // Calculate X rotation (lift right-left) - rotate around X axis
+    const xRotationValue = p.map(liftRight - liftLeft, -1, 1, -Math.PI/4, Math.PI/4);
+    cameraParams.xRotation = xRotationValue;
     
-    // Calculate rotation offset (right-left) - accumulate for continuous rotation
-    // Make movement more responsive when value is higher
-    const rotationDelta = p.map(rotateRight - rotateLeft, -1, 1, -0.01, 0.01) * 
-      (1 + Math.max(rotateRight, rotateLeft) * 3); // Accelerate based on value
-    cameraParams.rotationOffset += rotationDelta;
-    
-    // Update orbit angle for vertical rotation
-    cameraParams.orbitAngle = cameraParams.tiltAngle;
+    // Calculate Y rotation (rotate right-left) - rotate around Y axis in 15-degree increments
+    // Detect significant changes in rotation input
+    const rotationInput = rotateRight - rotateLeft;
+    if (Math.abs(rotationInput) > 0.5) { // Threshold for triggering rotation
+      // Determine direction and apply 15-degree increment
+      const rotationIncrement = Math.PI / 12; // 15 degrees
+      if (rotationInput > 0) {
+        cameraParams.yRotation += rotationIncrement;
+      } else {
+        cameraParams.yRotation -= rotationIncrement;
+      }
+      
+      // Normalize rotation to keep it within 0-2π range
+      cameraParams.yRotation = (cameraParams.yRotation + Math.PI * 2) % (Math.PI * 2);
+    }
     
     // Update force parameters
     forceParams.vortexStrength = p.map(tiltFront + tiltBack, 0, 2, 0, 0.05);
@@ -1306,15 +1308,8 @@ new p5((p) => {
         const dx = p.mouseX - cameraParams.mouseX;
         const dy = p.mouseY - cameraParams.mouseY;
         
-        // Update rotation based on horizontal mouse movement
-        cameraParams.targetRotation += dx * 0.01;
-        
-        // Update tilt based on vertical mouse movement (with limits)
-        cameraParams.targetTilt = p.constrain(
-          cameraParams.targetTilt - dy * 0.01,
-          -Math.PI / 2,  // Limit looking up
-          Math.PI / 4    // Limit looking down
-        );
+        // Update Y rotation based on horizontal mouse movement
+        cameraParams.targetYRotation += dx * 0.01;
         
         // Store current mouse position
         cameraParams.mouseX = p.mouseX;
@@ -1367,44 +1362,52 @@ new p5((p) => {
     // Add a second light source for better sphere rendering
     p.pointLight(160, 170, 190, -300, 200, 300); // Slightly blue fill light
     
-    // Smoothly interpolate camera rotation and tilt when using mouse control
+    // Smoothly interpolate camera rotation when using mouse control
     if (cameraParams.mouseControl) {
-      cameraParams.rotationOffset = p.lerp(cameraParams.rotationOffset, cameraParams.targetRotation, 0.1);
-      cameraParams.tiltAngle = p.lerp(cameraParams.tiltAngle, cameraParams.targetTilt, 0.1);
+      cameraParams.yRotation = p.lerp(cameraParams.yRotation, cameraParams.targetYRotation, 0.1);
     }
     
-    // Create a camera view from a 2.5D angle
-    let horizontalAngle = cameraParams.autoRotate && !cameraParams.mouseControl 
+    // Create a camera view with separate rotations for each axis
+    let baseAngle = cameraParams.autoRotate && !cameraParams.mouseControl 
       ? p.frameCount * cameraParams.rotationSpeed 
       : 0;
-    horizontalAngle += cameraParams.rotationOffset; // Add horizontal rotation from MIDI controls or mouse
+    baseAngle += cameraParams.yRotation; // Add Y rotation (around vertical axis)
     
-    // Calculate camera position for 2.5D view with tilt in a single plane
-    // Use tiltAngle to adjust the camera height and distance
-    const baseHeight = cameraParams.height;
-    const adjustedHeight = baseHeight * Math.cos(cameraParams.tiltAngle);
-    const forwardOffset = baseHeight * Math.sin(cameraParams.tiltAngle);
+    // Start with base camera position
+    let camX = 0, camY = -cameraParams.height, camZ = -cameraParams.radius;
     
-    // Convert to Cartesian coordinates with adjusted angles for 2.5D view
-    // Position camera high on Y axis looking down at XZ plane
-    const camX = cameraParams.radius * Math.sin(horizontalAngle);
-    const camY = adjustedHeight; // High on Y axis
-    const camZ = cameraParams.radius * Math.cos(horizontalAngle);
+    // Create rotation matrices
+    // First rotate around Y axis (horizontal rotation)
+    const cosY = Math.cos(baseAngle);
+    const sinY = Math.sin(baseAngle);
     
-    // Apply additional lift adjustment
-    const liftAxis = p.createVector(
-      Math.cos(horizontalAngle + Math.PI/2),
-      0,
-      Math.cos(horizontalAngle)
-    ).normalize();
+    const tempX = camX * cosY - camZ * sinY;
+    const tempZ = camX * sinY + camZ * cosY;
+    camX = tempX;
+    camZ = tempZ;
     
-    const liftAmount = cameraParams.liftAngle * cameraParams.radius * 0.5;
-    const liftOffset = p5.Vector.mult(liftAxis, liftAmount);
+    // Then rotate around X axis (lift right/left)
+    const cosX = Math.cos(cameraParams.xRotation);
+    const sinX = Math.sin(cameraParams.xRotation);
+    
+    const tempY1 = camY * cosX - camZ * sinX;
+    const tempZ1 = camY * sinX + camZ * cosX;
+    camY = tempY1;
+    camZ = tempZ1;
+    
+    // Finally rotate around Z axis (tilt front/back)
+    const cosZ = Math.cos(cameraParams.zRotation);
+    const sinZ = Math.sin(cameraParams.zRotation);
+    
+    const tempX2 = camX * cosZ - camY * sinZ;
+    const tempY2 = camX * sinZ + camY * cosZ;
+    camX = tempX2;
+    camY = tempY2;
     
     p.camera(
-      camX + liftOffset.x, camY + liftOffset.y, camZ + liftOffset.z,  // Camera position
-      0, 0, 0,                                                        // Look at center
-      0, 1, 0                                                         // Up vector
+      camX, camY, camZ,  // Camera position
+      0, 0, 0,           // Look at center
+      0, 1, 0            // Up vector
     );
     
     // Center the model at origin
