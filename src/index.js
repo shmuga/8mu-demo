@@ -39,6 +39,10 @@ new p5((p) => {
     connectionDensity: 0.5 // Control connection density
   };
   
+  // Physics parameters
+  const turbulence = 0.05; // Controls random movement
+  const elasticity = 0.01; // Controls how particles return to original positions
+  
   // Initialize WebMidi
   async function initMidi() {
     try {
