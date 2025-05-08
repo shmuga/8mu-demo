@@ -104,14 +104,20 @@ new p5((p) => {
     if (notification) {
       const paramName = midiParams.paramNames[paramIndex];
       const valuePercent = Math.round(value * 100);
-      notification.textContent = `${paramName}: ${valuePercent}%`;
+      
+      // Determine if this is a gesture or simulation control parameter
+      const isGesture = paramIndex >= 8; // Parameters 8-13 are gestures
+      const groupName = isGesture ? "GESTURE" : "SIMULATION";
+      
+      notification.innerHTML = `<strong>${groupName}</strong><br>${paramName}: ${valuePercent}%`;
       notification.style.display = 'block';
       notification.style.opacity = '1';
       
       // Store the last changed parameter
       lastChangedParam = {
         index: paramIndex,
-        value: value
+        value: value,
+        isGesture: isGesture
       };
       
       // Reset the timer
@@ -510,6 +516,9 @@ new p5((p) => {
           </button>
         </div>
       </div>
+      
+      <!-- Simulation Controls Section -->
+      <h2 style="text-align: center; margin: 20px 0; color: #4a90e2;">Simulation Controls</h2>
       <table style="width: 80%; margin: 0 auto; border-collapse: collapse;">
         <tr>
           <th style="text-align: left; padding: 10px;">Parameter</th>
@@ -518,7 +527,8 @@ new p5((p) => {
         </tr>
     `;
     
-    for (let i = 0; i < midiParams.paramNames.length; i++) {
+    // First add simulation controls (parameters 0-7)
+    for (let i = 0; i < 8; i++) {
       html += `
         <tr>
           <td style="padding: 10px;">${midiParams.paramNames[i]}</td>
@@ -530,6 +540,39 @@ new p5((p) => {
           <td style="padding: 10px;">
             <div style="width: 200px; height: 20px; background: #333; position: relative;">
               <div id="midi-value-bar-${i}" style="height: 100%; background: #4a90e2; width: ${midiParams.faderValues[i] * 100}%;"></div>
+            </div>
+            <span id="midi-value-text-${i}" style="margin-left: 10px;">${Math.round(midiParams.faderValues[i] * 100)}%</span>
+          </td>
+        </tr>
+      `;
+    }
+    
+    html += `
+      </table>
+      
+      <!-- Gesture Controls Section -->
+      <h2 style="text-align: center; margin: 20px 0; color: #e24a4a;">Gesture Controls</h2>
+      <table style="width: 80%; margin: 0 auto; border-collapse: collapse;">
+        <tr>
+          <th style="text-align: left; padding: 10px;">Parameter</th>
+          <th style="text-align: center; padding: 10px;">MIDI CC</th>
+          <th style="text-align: left; padding: 10px;">Value</th>
+        </tr>
+    `;
+    
+    // Then add gesture controls (parameters 8-13)
+    for (let i = 8; i < midiParams.paramNames.length; i++) {
+      html += `
+        <tr>
+          <td style="padding: 10px;">${midiParams.paramNames[i]}</td>
+          <td style="padding: 10px; text-align: center;">
+            <input type="number" id="midi-cc-${i}" value="${midiParams.faderMappings[i]}" 
+              style="width: 60px; text-align: center; background: #333; color: white; border: 1px solid #555;"
+              onchange="updateMidiMapping(${i}, this.value)">
+          </td>
+          <td style="padding: 10px;">
+            <div style="width: 200px; height: 20px; background: #333; position: relative;">
+              <div id="midi-value-bar-${i}" style="height: 100%; background: #e24a4a; width: ${midiParams.faderValues[i] * 100}%;"></div>
             </div>
             <span id="midi-value-text-${i}" style="margin-left: 10px;">${Math.round(midiParams.faderValues[i] * 100)}%</span>
           </td>
@@ -646,6 +689,8 @@ new p5((p) => {
     paramChangeNotification.style.zIndex = '999';
     paramChangeNotification.style.display = 'none';
     paramChangeNotification.style.transition = 'opacity 0.5s';
+    paramChangeNotification.style.textAlign = 'center';
+    paramChangeNotification.style.minWidth = '180px';
     document.body.appendChild(paramChangeNotification);
   }
   
