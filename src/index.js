@@ -59,10 +59,10 @@ new p5((p) => {
     height: 800, // Adjusted for 45-degree view
     autoRotate: true,
     rotationSpeed: 0.001,
-    tiltAngle: 0,
+    tiltAngle: Math.PI, // Start flipped over (180 degrees)
     liftAngle: 0,
     rotationOffset: 0,
-    orbitAngle: 0 // New parameter for vertical orbit
+    orbitAngle: Math.PI // Start flipped over (180 degrees)
   };
   
   // Force parameters
@@ -451,8 +451,13 @@ new p5((p) => {
   function smoothGestureValues() {
     // Only smooth gesture values (indices 8-13)
     for (let i = 8; i < midiParams.faderValues.length; i++) {
+      // Make smoothing more responsive when value is higher
+      // This creates faster acceleration when the value increases
+      const adaptiveSmoothingFactor = midiParams.smoothingFactor * 
+        (1 + midiParams.faderValues[i] * 2); // Increase smoothing factor based on value
+      
       midiParams.smoothedValues[i] = midiParams.smoothedValues[i] + 
-        (midiParams.faderValues[i] - midiParams.smoothedValues[i]) * midiParams.smoothingFactor;
+        (midiParams.faderValues[i] - midiParams.smoothedValues[i]) * adaptiveSmoothingFactor;
     }
     
     // Copy non-gesture values directly
@@ -486,15 +491,21 @@ new p5((p) => {
     const rotateLeft = midiParams.smoothedValues[13];
     
     // Calculate net tilt (front-back) - accumulate for continuous rotation
-    const tiltDelta = p.map(tiltFront - tiltBack, -1, 1, -0.01, 0.01);
+    // Make movement more responsive when value is higher
+    const tiltDelta = p.map(tiltFront - tiltBack, -1, 1, -0.01, 0.01) * 
+      (1 + Math.max(tiltFront, tiltBack) * 3); // Accelerate based on value
     cameraParams.tiltAngle += tiltDelta;
     
     // Calculate net lift (right-left) - accumulate for continuous rotation
-    const liftDelta = p.map(liftRight - liftLeft, -1, 1, -0.01, 0.01);
+    // Make movement more responsive when value is higher
+    const liftDelta = p.map(liftRight - liftLeft, -1, 1, -0.01, 0.01) * 
+      (1 + Math.max(liftRight, liftLeft) * 3); // Accelerate based on value
     cameraParams.liftAngle += liftDelta;
     
     // Calculate rotation offset (right-left) - accumulate for continuous rotation
-    const rotationDelta = p.map(rotateRight - rotateLeft, -1, 1, -0.01, 0.01);
+    // Make movement more responsive when value is higher
+    const rotationDelta = p.map(rotateRight - rotateLeft, -1, 1, -0.01, 0.01) * 
+      (1 + Math.max(rotateRight, rotateLeft) * 3); // Accelerate based on value
     cameraParams.rotationOffset += rotationDelta;
     
     // Update orbit angle for vertical rotation
