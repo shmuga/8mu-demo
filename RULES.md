@@ -1,0 +1,4 @@
+- use web midi
+- use p5.js
+- use javascript
+- vite as bundler
