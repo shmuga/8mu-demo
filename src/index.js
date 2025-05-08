@@ -341,29 +341,29 @@ new p5((p) => {
     return terrain;
   }
   
-  // Get color based on terrain height (like a topographic map)
+  // Get color based on terrain height with red and blue shades
   function getTerrainColor(height, maxHeight) {
     p.colorMode(p.HSB, 360, 100, 100, 255);
     
-    // Water (blue)
+    // Deep water (dark blue)
     if (height < -maxHeight * 0.3) {
-      return p.color(240, 70, 80, 200);
+      return p.color(220, 80, 60, 200);
     }
-    // Beach/lowlands (yellow/tan)
+    // Shallow water (light blue)
     else if (height < -maxHeight * 0.1) {
-      return p.color(50, 60, 90, 200);
+      return p.color(200, 70, 80, 200);
     }
-    // Plains/grasslands (green)
+    // Low ground (light red)
     else if (height < maxHeight * 0.2) {
-      return p.color(120, 60, 70, 200);
+      return p.color(350, 60, 80, 200);
     }
-    // Hills (darker green)
+    // Medium height (medium red)
     else if (height < maxHeight * 0.4) {
-      return p.color(140, 70, 50, 200);
+      return p.color(0, 70, 70, 200);
     }
-    // Mountains (brown/gray)
+    // High ground (dark red)
     else {
-      return p.color(30, 30, 60, 200);
+      return p.color(10, 80, 60, 200);
     }
   }
   
