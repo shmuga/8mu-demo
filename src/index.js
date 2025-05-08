@@ -9,8 +9,8 @@ new p5((p) => {
   
   // MIDI parameters
   const midiParams = {
-    faderValues: [0, 0, 0, 0, 0, 0, 0, 0],
-    faderMappings: [34, 35, 36, 37, 38, 39, 40, 41], // Default MIDI CC values
+    faderValues: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    faderMappings: [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47], // Default MIDI CC values
     paramNames: [
       'Size', 
       'Speed', 
@@ -19,7 +19,13 @@ new p5((p) => {
       'Brightness', 
       'Particle Density', 
       'Connection Density', 
-      'Terrain Height'
+      'Terrain Height',
+      'Tilt Front', // CC 42
+      'Tilt Back',  // CC 43
+      'Lift Right', // CC 44
+      'Lift Left',  // CC 45
+      'Rotate Right', // CC 46
+      'Rotate Left'   // CC 47
     ]
   };
   
@@ -42,6 +48,23 @@ new p5((p) => {
   // Physics parameters
   const turbulence = 0.05; // Controls random movement
   const elasticity = 0.01; // Controls how particles return to original positions
+  
+  // Camera parameters
+  let cameraParams = {
+    radius: 800,
+    height: 300,
+    autoRotate: true,
+    rotationSpeed: 0.001,
+    tiltAngle: 0,
+    liftAngle: 0,
+    rotationOffset: 0
+  };
+  
+  // Force parameters
+  let forceParams = {
+    vortexStrength: 0,
+    gravityStrength: 0
+  };
   
   // Initialize WebMidi
   async function initMidi() {
@@ -219,6 +242,27 @@ new p5((p) => {
     const connectionDensity = p.map(midiParams.faderValues[6], 0, 1, 0.2, 1);
     const terrainHeight = p.map(midiParams.faderValues[7], 0, 1, 20, 200);
     
+    // Update camera parameters based on MIDI controls
+    const tiltFront = midiParams.faderValues[8];
+    const tiltBack = midiParams.faderValues[9];
+    const liftRight = midiParams.faderValues[10];
+    const liftLeft = midiParams.faderValues[11];
+    const rotateRight = midiParams.faderValues[12];
+    const rotateLeft = midiParams.faderValues[13];
+    
+    // Calculate net tilt (front-back)
+    cameraParams.tiltAngle = p.map(tiltFront - tiltBack, -1, 1, -0.5, 0.5);
+    
+    // Calculate net lift (right-left)
+    cameraParams.liftAngle = p.map(liftRight - liftLeft, -1, 1, -0.5, 0.5);
+    
+    // Calculate rotation offset (right-left)
+    cameraParams.rotationOffset = p.map(rotateRight - rotateLeft, -1, 1, -0.5, 0.5);
+    
+    // Update force parameters
+    forceParams.vortexStrength = p.map(tiltFront + tiltBack, 0, 2, 0, 0.05);
+    forceParams.gravityStrength = p.map(liftRight + liftLeft, 0, 2, 0, 0.1);
+    
     // Update terrain height based on MIDI control
     if (Math.abs(organicModel.terrainHeight - terrainHeight) > 5) {
       organicModel.terrainHeight = terrainHeight;
@@ -260,9 +304,20 @@ new p5((p) => {
       const gravityForce = p5.Vector.sub(
         p.createVector(0, 0, 0),
         particle.position
-      ).normalize().mult(p.map(midiParams.faderValues[7], 0, 1, 0, 0.05));
+      ).normalize().mult(p.map(midiParams.faderValues[7], 0, 1, 0, 0.05) + forceParams.gravityStrength);
       
       particle.velocity.add(gravityForce);
+      
+      // Apply vortex force (circular motion around y-axis)
+      if (forceParams.vortexStrength > 0) {
+        const vortexForce = p.createVector(
+          -particle.position.z,
+          0,
+          particle.position.x
+        ).normalize().mult(forceParams.vortexStrength);
+        
+        particle.velocity.add(vortexForce);
+      }
       
       // Apply elasticity (return to original position)
       const elasticForce = p5.Vector.sub(
@@ -422,6 +477,13 @@ new p5((p) => {
     
     let html = `
       <h1 style="text-align: center; margin-bottom: 30px;">MIDI Settings</h1>
+      <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+        <div style="margin: 0 10px;">
+          <button id="toggle-camera-rotation" style="padding: 8px 15px; background: #4a90e2; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Toggle Camera Auto-Rotation
+          </button>
+        </div>
+      </div>
       <table style="width: 80%; margin: 0 auto; border-collapse: collapse;">
         <tr>
           <th style="text-align: left; padding: 10px;">Parameter</th>
@@ -430,7 +492,7 @@ new p5((p) => {
         </tr>
     `;
     
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < midiParams.paramNames.length; i++) {
       html += `
         <tr>
           <td style="padding: 10px;">${midiParams.paramNames[i]}</td>
@@ -473,9 +535,15 @@ new p5((p) => {
     settingsDiv.innerHTML = html;
     document.body.appendChild(settingsDiv);
     
-    // Add event listener to close button
+    // Add event listeners
     document.getElementById('close-settings').addEventListener('click', () => {
       toggleSettings();
+    });
+    
+    document.getElementById('toggle-camera-rotation').addEventListener('click', () => {
+      cameraParams.autoRotate = !cameraParams.autoRotate;
+      document.getElementById('toggle-camera-rotation').textContent = 
+        cameraParams.autoRotate ? 'Disable Camera Auto-Rotation' : 'Enable Camera Auto-Rotation';
     });
     
     // Add global function to update MIDI mappings
@@ -582,15 +650,21 @@ new p5((p) => {
     p.directionalLight(200, 200, 200, 0.5, 1, -0.5);
     
     // Create a camera view that looks at the landscape from an angle
-    const camRadius = 800;
-    const camX = camRadius * Math.sin(p.frameCount * 0.001);
-    const camZ = camRadius * Math.cos(p.frameCount * 0.001);
-    const camY = 300;
+    let camAngle = cameraParams.autoRotate ? p.frameCount * cameraParams.rotationSpeed : 0;
+    camAngle += cameraParams.rotationOffset; // Add rotation from MIDI controls
+    
+    const camX = cameraParams.radius * Math.sin(camAngle);
+    const camZ = cameraParams.radius * Math.cos(camAngle);
+    
+    // Apply tilt and lift adjustments
+    const camY = cameraParams.height + (cameraParams.tiltAngle * cameraParams.radius);
+    const camXOffset = cameraParams.liftAngle * cameraParams.radius * 0.5;
+    const camZOffset = cameraParams.liftAngle * cameraParams.radius * 0.5;
     
     p.camera(
-      camX, camY, camZ,  // Camera position
-      0, 0, 0,           // Look at center
-      0, 1, 0            // Up vector
+      camX + camXOffset, camY, camZ + camZOffset,  // Camera position
+      0, 0, 0,                                     // Look at center
+      0, 1, 0                                      // Up vector
     );
     
     // Center the model at origin
