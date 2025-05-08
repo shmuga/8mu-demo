@@ -380,88 +380,175 @@ new p5((p) => {
     }
   }
   
-  // Draw the settings UI
-  function drawSettings() {
-    if (!showSettings) return;
+  // Create settings UI as HTML
+  function createSettingsUI() {
+    const settingsDiv = document.createElement('div');
+    settingsDiv.id = 'settings-panel';
+    settingsDiv.style.display = 'none';
+    settingsDiv.style.position = 'absolute';
+    settingsDiv.style.top = '0';
+    settingsDiv.style.left = '0';
+    settingsDiv.style.width = '100%';
+    settingsDiv.style.height = '100%';
+    settingsDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    settingsDiv.style.color = 'white';
+    settingsDiv.style.fontFamily = 'Arial, sans-serif';
+    settingsDiv.style.zIndex = '1000';
+    settingsDiv.style.padding = '20px';
+    settingsDiv.style.boxSizing = 'border-box';
+    settingsDiv.style.overflow = 'auto';
     
-    p.push();
-    p.fill(0, 200);
-    p.noStroke();
-    p.rect(0, 0, p.width, p.height);
-    
-    p.fill(255);
-    p.textSize(24);
-    p.textAlign(p.CENTER, p.CENTER);
-    p.text('MIDI Settings', p.width/2, 50);
-    
-    p.textSize(16);
-    p.textAlign(p.LEFT, p.CENTER);
-    
-    const startY = 100;
-    const rowHeight = 40;
+    let html = `
+      <h1 style="text-align: center; margin-bottom: 30px;">MIDI Settings</h1>
+      <table style="width: 80%; margin: 0 auto; border-collapse: collapse;">
+        <tr>
+          <th style="text-align: left; padding: 10px;">Parameter</th>
+          <th style="text-align: center; padding: 10px;">MIDI CC</th>
+          <th style="text-align: left; padding: 10px;">Value</th>
+        </tr>
+    `;
     
     for (let i = 0; i < 8; i++) {
-      const y = startY + i * rowHeight;
-      
-      // Parameter name
-      p.text(midiParams.paramNames[i], 100, y);
-      
-      // MIDI CC number
-      p.fill(200);
-      p.rect(300, y - 15, 60, 30);
-      p.fill(0);
-      p.text(midiParams.faderMappings[i], 320, y);
-      
-      // Value visualization
-      p.fill(100, 200, 255);
-      const barWidth = midiParams.faderValues[i] * 200;
-      p.rect(400, y - 10, barWidth, 20);
-      
-      p.fill(255);
-      p.text(Math.round(midiParams.faderValues[i] * 100) + '%', 610, y);
+      html += `
+        <tr>
+          <td style="padding: 10px;">${midiParams.paramNames[i]}</td>
+          <td style="padding: 10px; text-align: center;">
+            <input type="number" id="midi-cc-${i}" value="${midiParams.faderMappings[i]}" 
+              style="width: 60px; text-align: center; background: #333; color: white; border: 1px solid #555;"
+              onchange="updateMidiMapping(${i}, this.value)">
+          </td>
+          <td style="padding: 10px;">
+            <div style="width: 200px; height: 20px; background: #333; position: relative;">
+              <div id="midi-value-bar-${i}" style="height: 100%; background: #4a90e2; width: ${midiParams.faderValues[i] * 100}%;"></div>
+            </div>
+            <span id="midi-value-text-${i}" style="margin-left: 10px;">${Math.round(midiParams.faderValues[i] * 100)}%</span>
+          </td>
+        </tr>
+      `;
     }
     
-    p.textAlign(p.CENTER, p.CENTER);
-    p.text('Press S to close settings', p.width/2, p.height - 50);
-    p.pop();
+    html += `
+      </table>
+      <div style="text-align: center; margin-top: 30px;">
+        <div style="margin: 20px 0;">
+          <h3>Keyboard Shortcuts</h3>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>S</strong> - Toggle Settings
+          </div>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>R</strong> - Reset Simulation
+          </div>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>P</strong> - Pause/Play
+          </div>
+        </div>
+        <button id="close-settings" style="padding: 10px 20px; background: #4a90e2; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Close Settings
+        </button>
+      </div>
+    `;
+    
+    settingsDiv.innerHTML = html;
+    document.body.appendChild(settingsDiv);
+    
+    // Add event listener to close button
+    document.getElementById('close-settings').addEventListener('click', () => {
+      toggleSettings();
+    });
+    
+    // Add global function to update MIDI mappings
+    window.updateMidiMapping = (index, value) => {
+      midiParams.faderMappings[index] = parseInt(value, 10);
+    };
   }
   
-  // Draw status bar
-  function drawStatusBar() {
-    p.push();
-    p.fill(0, 150);
-    p.rect(0, p.height - 30, p.width, 30);
-    
-    p.fill(255);
-    p.textSize(14);
-    p.textAlign(p.LEFT, p.CENTER);
-    
-    // Show simulation state
-    p.text(`Simulation: ${simulationState.toUpperCase()}`, 20, p.height - 15);
-    
-    // Show controls help
-    p.textAlign(p.RIGHT, p.CENTER);
-    p.text('S: Settings | R: Reset | P: Pause/Play', p.width - 20, p.height - 15);
-    p.pop();
-  }
-  
-  // Handle keyboard input
-  p.keyPressed = () => {
-    if (p.key === 's' || p.key === 'S') {
-      showSettings = !showSettings;
-    } else if (p.key === 'r' || p.key === 'R') {
-      simulationState = 'reset';
-      initOrganicModel();
-      simulationState = 'running';
-    } else if (p.key === 'p' || p.key === 'P') {
-      simulationState = simulationState === 'running' ? 'paused' : 'running';
+  // Toggle settings visibility
+  function toggleSettings() {
+    showSettings = !showSettings;
+    const settingsPanel = document.getElementById('settings-panel');
+    if (settingsPanel) {
+      settingsPanel.style.display = showSettings ? 'block' : 'none';
     }
-  };
+  }
+  
+  // Update settings UI with current values
+  function updateSettingsUI() {
+    if (!showSettings) return;
+    
+    for (let i = 0; i < 8; i++) {
+      const valueBar = document.getElementById(`midi-value-bar-${i}`);
+      const valueText = document.getElementById(`midi-value-text-${i}`);
+      
+      if (valueBar && valueText) {
+        valueBar.style.width = `${midiParams.faderValues[i] * 100}%`;
+        valueText.textContent = `${Math.round(midiParams.faderValues[i] * 100)}%`;
+      }
+    }
+  }
+  
+  // Create status bar as HTML
+  function createStatusBar() {
+    const statusBar = document.createElement('div');
+    statusBar.id = 'status-bar';
+    statusBar.style.position = 'absolute';
+    statusBar.style.bottom = '0';
+    statusBar.style.left = '0';
+    statusBar.style.width = '100%';
+    statusBar.style.height = '30px';
+    statusBar.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+    statusBar.style.color = 'white';
+    statusBar.style.fontFamily = 'Arial, sans-serif';
+    statusBar.style.zIndex = '999';
+    statusBar.style.display = 'flex';
+    statusBar.style.justifyContent = 'space-between';
+    statusBar.style.alignItems = 'center';
+    statusBar.style.padding = '0 20px';
+    statusBar.style.boxSizing = 'border-box';
+    
+    const statusText = document.createElement('div');
+    statusText.id = 'simulation-status';
+    statusText.textContent = `Simulation: ${simulationState.toUpperCase()}`;
+    
+    const controlsText = document.createElement('div');
+    controlsText.textContent = 'S: Settings | R: Reset | P: Pause/Play';
+    
+    statusBar.appendChild(statusText);
+    statusBar.appendChild(controlsText);
+    document.body.appendChild(statusBar);
+  }
+  
+  // Update status bar with current state
+  function updateStatusBar() {
+    const statusText = document.getElementById('simulation-status');
+    if (statusText) {
+      statusText.textContent = `Simulation: ${simulationState.toUpperCase()}`;
+    }
+  }
+  
+  // Set up keyboard shortcuts using DOM events
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 's' || event.key === 'S') {
+        toggleSettings();
+      } else if (event.key === 'r' || event.key === 'R') {
+        simulationState = 'reset';
+        initOrganicModel();
+        simulationState = 'running';
+        updateStatusBar();
+      } else if (event.key === 'p' || event.key === 'P') {
+        simulationState = simulationState === 'running' ? 'paused' : 'running';
+        updateStatusBar();
+      }
+    });
+  }
   
   p.setup = () => {
     p.createCanvas(p.windowWidth, p.windowHeight, p.WEBGL);
     initMidi();
     initOrganicModel();
+    createSettingsUI();
+    createStatusBar();
+    setupKeyboardShortcuts();
   };
 
   p.draw = () => {
@@ -487,12 +574,8 @@ new p5((p) => {
     updateOrganicModel();
     drawOrganicModel();
     
-    // Reset camera for UI elements
-    p.camera();
-    p.noLights();
-    
-    drawSettings();
-    drawStatusBar();
+    // Update HTML UI elements
+    updateSettingsUI();
   };
 
   p.windowResized = () => {
