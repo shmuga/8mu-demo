@@ -360,12 +360,25 @@ new p5((p) => {
       const v2 = p5.Vector.sub(p01, p00);
       const normal = v1.cross(v2).normalize();
       
+      // Make sure normal points upward (for consistent bouncing)
+      if (normal.y < 0) {
+        normal.mult(-1);
+      }
+      
+      // Calculate penetration depth
+      const penetrationDepth = (terrainHeight + particle.size * 0.5) - particle.position.y;
+      
       // Check if particle is below terrain surface (with a small buffer for particle size)
-      if (particle.position.y < terrainHeight + particle.size * 0.5) {
+      if (penetrationDepth > 0) {
+        // Calculate velocity relative to surface
+        const velMagnitude = particle.velocity.mag();
+        
         return {
           collision: true,
           normal: normal,
-          terrainHeight: terrainHeight
+          terrainHeight: terrainHeight,
+          penetrationDepth: penetrationDepth,
+          velocityMagnitude: velMagnitude
         };
       }
     }
@@ -374,7 +387,9 @@ new p5((p) => {
     return {
       collision: false,
       normal: p.createVector(0, 1, 0),
-      terrainHeight: -Infinity
+      terrainHeight: -Infinity,
+      penetrationDepth: 0,
+      velocityMagnitude: 0
     };
   }
   
@@ -534,11 +549,24 @@ new p5((p) => {
       // Check for collision with terrain and bounce
       const terrainCollision = checkTerrainCollision(particle);
       if (terrainCollision.collision) {
-        // Bounce off the terrain surface
-        const bounceForce = terrainCollision.normal.mult(0.2);
-        particle.velocity.reflect(terrainCollision.normal);
-        particle.velocity.mult(0.8); // Reduce velocity after bounce
-        particle.position.add(bounceForce); // Push away from surface
+        // Calculate bounce with proper physics
+        // First, move the particle to just above the terrain surface
+        particle.position.y = terrainCollision.terrainHeight + particle.size * 0.5;
+        
+        // Calculate reflection vector with some energy loss
+        const bounciness = 0.7; // Higher values = more bouncy
+        
+        // Reflect velocity vector around the terrain normal
+        const dot = particle.velocity.dot(terrainCollision.normal);
+        const reflectionForce = p5.Vector.mult(terrainCollision.normal, 2 * dot);
+        particle.velocity.sub(reflectionForce);
+        
+        // Apply bounciness factor (energy loss)
+        particle.velocity.mult(bounciness);
+        
+        // Add a small upward impulse for more visible bouncing
+        const bounceImpulse = p5.Vector.mult(terrainCollision.normal, 0.5 * speed);
+        particle.velocity.add(bounceImpulse);
       }
       
       // Use fixed size with global size parameter
