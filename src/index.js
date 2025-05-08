@@ -17,8 +17,8 @@ new p5((p) => {
       'Complexity', 
       'Color Hue', 
       'Brightness', 
-      'Turbulence', 
-      'Elasticity', 
+      'Particle Density', 
+      'Connection Density', 
       'Terrain Height'
     ]
   };
@@ -34,7 +34,9 @@ new p5((p) => {
     terrain: [], // Add terrain data for landscape
     terrainResolution: 30, // Resolution of the terrain grid
     terrainSize: 500, // Size of the terrain
-    terrainHeight: 100 // Maximum height of terrain features
+    terrainHeight: 100, // Maximum height of terrain features
+    particleDensity: 0.5, // Control particle density
+    connectionDensity: 0.5 // Control connection density
   };
   
   // Initialize WebMidi
@@ -107,8 +109,10 @@ new p5((p) => {
       // Sort by distance
       distances.sort((a, b) => a.distance - b.distance);
       
-      // Connect to the 3 closest particles
-      const numConnections = Math.min(3, distances.length);
+      // Connect to the closest particles based on connection density
+      const maxPossibleConnections = Math.min(5, distances.length);
+      const numConnections = Math.max(1, Math.floor(maxPossibleConnections * organicModel.connectionDensity));
+      
       for (let k = 0; k < numConnections; k++) {
         connections.push({
           from: i,
@@ -189,7 +193,8 @@ new p5((p) => {
     
     // Create particles
     organicModel.particles = [];
-    for (let i = 0; i < organicModel.numParticles; i++) {
+    const actualParticles = Math.floor(organicModel.numParticles * organicModel.particleDensity);
+    for (let i = 0; i < actualParticles; i++) {
       organicModel.particles.push(createParticle());
     }
     
@@ -206,14 +211,32 @@ new p5((p) => {
     const complexity = p.map(midiParams.faderValues[2], 0, 1, 0.5, 3);
     const colorHue = p.map(midiParams.faderValues[3], 0, 1, 0, 360);
     const brightness = p.map(midiParams.faderValues[4], 0, 1, 0.2, 1);
-    const turbulence = p.map(midiParams.faderValues[5], 0, 1, 0, 0.1);
-    const elasticity = p.map(midiParams.faderValues[6], 0, 1, 0.01, 0.1);
+    const particleDensity = p.map(midiParams.faderValues[5], 0, 1, 0.2, 1);
+    const connectionDensity = p.map(midiParams.faderValues[6], 0, 1, 0.2, 1);
     const terrainHeight = p.map(midiParams.faderValues[7], 0, 1, 20, 200);
     
     // Update terrain height based on MIDI control
     if (Math.abs(organicModel.terrainHeight - terrainHeight) > 5) {
       organicModel.terrainHeight = terrainHeight;
       organicModel.terrain = generateTerrain();
+    }
+    
+    // Update particle and connection density if changed significantly
+    if (Math.abs(organicModel.particleDensity - particleDensity) > 0.1 ||
+        Math.abs(organicModel.connectionDensity - connectionDensity) > 0.1) {
+      organicModel.particleDensity = particleDensity;
+      organicModel.connectionDensity = connectionDensity;
+      
+      // Reinitialize with new densities
+      const oldParticles = organicModel.particles.slice();
+      initOrganicModel();
+      
+      // Transfer positions from old particles to maintain continuity
+      const minLength = Math.min(oldParticles.length, organicModel.particles.length);
+      for (let i = 0; i < minLength; i++) {
+        organicModel.particles[i].position = oldParticles[i].position.copy();
+        organicModel.particles[i].velocity = oldParticles[i].velocity.copy();
+      }
     }
     
     // Update particles
@@ -283,9 +306,6 @@ new p5((p) => {
   
   // Draw the organic model
   function drawOrganicModel() {
-    p.push();
-    p.translate(p.width/2, p.height/2, 0);
-    
     // Draw terrain
     drawTerrain();
     
@@ -312,8 +332,6 @@ new p5((p) => {
       p.sphere(particle.size);
       p.pop();
     }
-    
-    p.pop();
   }
   
   // Draw the terrain mesh
@@ -571,8 +589,14 @@ new p5((p) => {
       0, 1, 0            // Up vector
     );
     
+    // Center the model at origin
+    p.push();
+    p.translate(0, 0, 0);
+    
     updateOrganicModel();
     drawOrganicModel();
+    
+    p.pop();
     
     // Update HTML UI elements
     updateSettingsUI();
