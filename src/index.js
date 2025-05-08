@@ -1410,7 +1410,7 @@ new p5((p) => {
     p.camera(
       camX, camY, camZ,  // Camera position
       0, 0, 0,           // Look at center
-      0, 1, 0            // Up vector
+      0, -1, 0            // Up vector
     );
     
     // Center the model at origin
