@@ -524,7 +524,7 @@ new p5((p) => {
     const turbulenceValue = p.map(midiParams.smoothedValues[3], 0, 1, 0.01, 0.3); // Changed from colorHue to turbulence
     const randomness = p.map(midiParams.smoothedValues[4], 0, 1, 0.01, 0.2); // Controls random impulses and movement
     const particleDensity = p.map(midiParams.smoothedValues[5], 0, 1, 0.2, 1);
-    const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0.2, 1);
+    const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0, 1); // Start from 0 instead of 0.2
     const terrainHeight = p.map(midiParams.smoothedValues[7], 0, 1, 20, 200);
     
     // Update camera parameters based on MIDI controls (using smoothed values)
@@ -577,13 +577,21 @@ new p5((p) => {
       
       // Reinitialize with new densities
       const oldParticles = organicModel.particles.slice();
-      initOrganicModel();
       
-      // Transfer positions from old particles to maintain continuity
-      const minLength = Math.min(oldParticles.length, organicModel.particles.length);
-      for (let i = 0; i < minLength; i++) {
-        organicModel.particles[i].position = oldParticles[i].position.copy();
-        organicModel.particles[i].velocity = oldParticles[i].velocity.copy();
+      // If we're only changing connection density, don't reinitialize particles
+      if (Math.abs(organicModel.connectionDensity - connectionDensity) > 0.1) {
+        // Just update connections
+        organicModel.connections = createConnections();
+      } else {
+        // Full reinitialization needed
+        initOrganicModel();
+        
+        // Transfer positions from old particles to maintain continuity
+        const minLength = Math.min(oldParticles.length, organicModel.particles.length);
+        for (let i = 0; i < minLength; i++) {
+          organicModel.particles[i].position = oldParticles[i].position.copy();
+          organicModel.particles[i].velocity = oldParticles[i].velocity.copy();
+        }
       }
     }
     
@@ -801,8 +809,12 @@ new p5((p) => {
       organicModel.particles.push(...organicModel.particlesToAdd);
       organicModel.particlesToAdd = [];
       
-      // Recreate connections when particles are added
-      organicModel.connections = createConnections();
+      // Recreate connections when particles are added (only if connection density > 0)
+      if (organicModel.connectionDensity > 0) {
+        organicModel.connections = createConnections();
+      } else {
+        organicModel.connections = [];
+      }
     }
     
     // Remove particles marked for deletion (in reverse order to avoid index issues)
@@ -823,8 +835,12 @@ new p5((p) => {
       // Clear the removal queue
       organicModel.particlesToRemove = [];
       
-      // Recreate connections when particles are removed
-      organicModel.connections = createConnections();
+      // Recreate connections when particles are removed (only if connection density > 0)
+      if (organicModel.connectionDensity > 0) {
+        organicModel.connections = createConnections();
+      } else {
+        organicModel.connections = [];
+      }
     }
     
     // Check if we need to spawn more particles
@@ -834,8 +850,12 @@ new p5((p) => {
         organicModel.particles.push(createParticle());
       }
       
-      // Recreate connections for new particles
-      organicModel.connections = createConnections();
+      // Recreate connections for new particles (only if connection density > 0)
+      if (organicModel.connectionDensity > 0) {
+        organicModel.connections = createConnections();
+      } else {
+        organicModel.connections = [];
+      }
     }
   }
   
