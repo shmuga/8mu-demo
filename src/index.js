@@ -669,7 +669,7 @@ new p5((p) => {
       // Create a box-like environment with transparent walls
       const terrainSize = organicModel.terrainSize;
       const halfSize = terrainSize / 2;
-      const maxHeight = organicModel.terrainHeight * 2; // Maximum height for the box
+      const maxHeight = organicModel.terrainHeight * 6; // Much higher ceiling for the box
       
       // Bounce off X walls
       if (particle.position.x > halfSize) {
@@ -971,7 +971,7 @@ new p5((p) => {
     p.stroke(255, 30); // Very subtle white lines
     p.strokeWeight(0.5);
     
-    // Draw box at terrain boundaries
+    // Draw box at terrain boundaries with much higher ceiling
     p.beginShape(p.LINES);
     
     // Bottom edges (already have terrain there, but complete the box)
