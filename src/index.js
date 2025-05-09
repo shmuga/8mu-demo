@@ -868,18 +868,20 @@ new p5((p) => {
     // Draw axes for orientation
     drawAxes();
     
-    // Draw connections
-    p.stroke(0, 100);
-    p.strokeWeight(0.5);
-    
-    for (const connection of organicModel.connections) {
-      const particleA = organicModel.particles[connection.from];
-      const particleB = organicModel.particles[connection.to];
+    // Draw connections only if connection density is greater than 0
+    if (organicModel.connectionDensity > 0 && organicModel.connections.length > 0) {
+      p.stroke(0, 100);
+      p.strokeWeight(0.5);
       
-      p.line(
-        particleA.position.x, particleA.position.y, particleA.position.z,
-        particleB.position.x, particleB.position.y, particleB.position.z
-      );
+      for (const connection of organicModel.connections) {
+        const particleA = organicModel.particles[connection.from];
+        const particleB = organicModel.particles[connection.to];
+        
+        p.line(
+          particleA.position.x, particleA.position.y, particleA.position.z,
+          particleB.position.x, particleB.position.y, particleB.position.z
+        );
+      }
     }
     
     // Draw particles as enhanced spheres
