@@ -515,7 +515,7 @@ new p5((p) => {
     const speed = p.map(midiParams.smoothedValues[1], 0, 1, 0.1, 2);
     const complexity = p.map(midiParams.smoothedValues[2], 0, 1, 0.5, 3);
     const colorHue = p.map(midiParams.smoothedValues[3], 0, 1, 0, 360);
-    const randomness = p.map(midiParams.smoothedValues[4], 0, 1, 0.01, 0.2); // Brightness now controls randomness
+    const randomness = p.map(midiParams.smoothedValues[4], 0, 1, 0.01, 0.2); // Controls random impulses and movement
     const particleDensity = p.map(midiParams.smoothedValues[5], 0, 1, 0.2, 1);
     const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0.2, 1);
     const terrainHeight = p.map(midiParams.smoothedValues[7], 0, 1, 20, 200);
@@ -642,16 +642,22 @@ new p5((p) => {
       
       particle.velocity.add(elasticForce);
       
-      // Add random movement based on randomness parameter
-      if (randomness > 0.05) {
-        // Add more chaotic movement when randomness is high
-        const randomForce = p.createVector(
+      // Apply random impulse based on randomness parameter
+      // This creates more dramatic and unpredictable movement
+      if (p.random() < randomness * 0.3) { // Probability of impulse increases with randomness
+        // Calculate impulse strength based on randomness
+        const impulseStrength = p.map(randomness, 0, 0.2, 0.5, 3.0);
+        
+        // Create random direction vector
+        const randomDirection = p.createVector(
           p.random(-1, 1),
           p.random(-1, 1),
           p.random(-1, 1)
-        ).normalize().mult(randomness * 2);
+        ).normalize();
         
-        particle.velocity.add(randomForce);
+        // Apply impulse as a sudden force
+        const randomImpulse = p5.Vector.mult(randomDirection, impulseStrength);
+        particle.velocity.add(randomImpulse);
       }
       
       // Update position
@@ -750,15 +756,18 @@ new p5((p) => {
         particle.position.z = p.lerp(particle.position.z, bz, 0.03);
       }
       
-      // Apply 3D Perlin noise for more natural movement
+      // Apply 3D Perlin noise for more natural continuous movement
+      // This is separate from the random impulses
       const noiseTime = p.frameCount * 0.01;
       const noiseX = p.noise(particle.noiseOffset, noiseTime) - 0.5;
       const noiseY = p.noise(particle.noiseOffset + 100, noiseTime) - 0.5;
       const noiseZ = p.noise(particle.noiseOffset + 200, noiseTime) - 0.5;
       
-      particle.position.x += noiseX * randomness;
-      particle.position.y += noiseY * randomness;
-      particle.position.z += noiseZ * randomness;
+      // Scale noise effect based on randomness, but keep it subtle
+      const noiseStrength = p.map(randomness, 0, 0.2, 0.1, 0.5);
+      particle.position.x += noiseX * noiseStrength;
+      particle.position.y += noiseY * noiseStrength;
+      particle.position.z += noiseZ * noiseStrength;
     }
     
     // Apply connection constraints
