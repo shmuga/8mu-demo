@@ -314,6 +314,11 @@ new p5((p) => {
     const connections = [];
     const particles = organicModel.particles;
     
+    // If connection density is 0, return empty connections array
+    if (organicModel.connectionDensity <= 0) {
+      return connections;
+    }
+    
     // Connect each particle to a few nearby particles
     for (let i = 0; i < particles.length; i++) {
       const distances = [];
@@ -330,7 +335,7 @@ new p5((p) => {
       
       // Connect to the closest particles based on connection density
       const maxPossibleConnections = Math.min(5, distances.length);
-      const numConnections = Math.max(1, Math.floor(maxPossibleConnections * organicModel.connectionDensity));
+      const numConnections = Math.floor(maxPossibleConnections * organicModel.connectionDensity);
       
       for (let k = 0; k < numConnections; k++) {
         connections.push({
