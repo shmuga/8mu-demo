@@ -580,8 +580,7 @@ new p5((p) => {
       }
     }
     
-    // Check for particle-particle collisions
-    const particleCollisions = [];
+    // Check for particle-particle collisions but don't remove them
     for (let i = 0; i < organicModel.particles.length; i++) {
       for (let j = i + 1; j < organicModel.particles.length; j++) {
         const particleA = organicModel.particles[i];
@@ -590,18 +589,18 @@ new p5((p) => {
         // Calculate distance between particles
         const distance = p5.Vector.dist(particleA.position, particleB.position);
         
-        // If particles are colliding
+        // If particles are colliding, bounce them off each other
         if (distance < (particleA.size + particleB.size) * 0.8) {
-          // Mark both particles for removal if they haven't already been marked
-          if (!particleCollisions.includes(i) && !particleCollisions.includes(j)) {
-            particleCollisions.push(i, j);
-          }
+          // Calculate direction vector between particles
+          const direction = p5.Vector.sub(particleB.position, particleA.position).normalize();
+          
+          // Apply opposing forces to separate them
+          const force = 0.5;
+          particleA.velocity.sub(p5.Vector.mult(direction, force));
+          particleB.velocity.add(p5.Vector.mult(direction, force));
         }
       }
     }
-    
-    // Add collision particles to removal queue
-    organicModel.particlesToRemove.push(...particleCollisions);
     
     // Update particles
     for (let i = 0; i < organicModel.particles.length; i++) {
@@ -698,19 +697,7 @@ new p5((p) => {
           particle.terrainHits++;
           particle.lastCollisionTime = currentTime;
           
-          // If this is the first hit, create a new particle
-          if (particle.terrainHits === 1) {
-            // Create a new particle near this one with a slight offset
-            const newX = particle.position.x + p.random(-20, 20);
-            const newY = particle.position.y + p.random(10, 30);
-            const newZ = particle.position.z + p.random(-20, 20);
-            organicModel.particlesToAdd.push(createParticle(newX, newY, newZ));
-          }
-          
-          // If this particle has hit the terrain 5 times, mark it for removal
-          if (particle.terrainHits >= 5) {
-            organicModel.particlesToRemove.push(i);
-          }
+          // No particle creation or removal based on terrain hits
         }
         
         // Calculate bounce with proper physics
