@@ -2,6 +2,8 @@
 
 An interactive 3D visualization that responds to MIDI controller input. The application creates an organic, particle-based model that can be manipulated in real-time using MIDI controllers or on-screen sliders. By default configure to work with Music Thing Modular 8mu.
 
+Live demo: [https://8mu-demo.vercel.app/](https://8mu-demo.vercel.app/)
+
 ![MIDI Visuals Screenshot](./docs/demo.gif)
 
 ## Features
