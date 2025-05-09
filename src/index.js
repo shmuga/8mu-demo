@@ -1,4 +1,3 @@
-import * as m from './module.js';
 import p5 from 'p5';
 import { WebMidi } from 'webmidi';
 
@@ -83,6 +82,9 @@ new p5((p) => {
       await WebMidi.enable();
       console.log("WebMidi enabled!");
       
+      // Check if there are any MIDI inputs
+      const hasMidiInputs = WebMidi.inputs.length > 0;
+      
       // List available inputs
       WebMidi.inputs.forEach(input => {
         console.log(`Input: ${input.name}`);
@@ -102,8 +104,16 @@ new p5((p) => {
           }
         });
       });
+      
+      // If no MIDI inputs are detected, show the slider controls
+      if (!hasMidiInputs) {
+        console.log("No MIDI inputs detected. Showing slider controls.");
+        createSliderControls();
+      }
     } catch (err) {
       console.error("WebMidi could not be enabled:", err);
+      // Show slider controls if WebMidi fails
+      createSliderControls();
     }
   }
   
@@ -1152,6 +1162,9 @@ new p5((p) => {
           <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
             <strong>M</strong> - Toggle Mouse Control
           </div>
+          <div style="display: inline-block; margin: 10px; padding: 10px; border: 1px solid #555; border-radius: 5px;">
+            <strong>C</strong> - Toggle Control Sliders
+          </div>
         </div>
         <div style="margin: 20px 0;">
           <h3>Mouse Controls</h3>
@@ -1215,6 +1228,144 @@ new p5((p) => {
     }
   }
   
+  // Create slider controls when no MIDI controller is connected
+  function createSliderControls() {
+    const sliderPanel = document.createElement('div');
+    sliderPanel.id = 'slider-panel';
+    sliderPanel.style.position = 'absolute';
+    sliderPanel.style.bottom = '40px';
+    sliderPanel.style.left = '50%';
+    sliderPanel.style.transform = 'translateX(-50%)';
+    sliderPanel.style.width = '80%';
+    sliderPanel.style.maxWidth = '800px';
+    sliderPanel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    sliderPanel.style.color = 'white';
+    sliderPanel.style.fontFamily = 'Arial, sans-serif';
+    sliderPanel.style.borderRadius = '5px';
+    sliderPanel.style.zIndex = '998';
+    sliderPanel.style.padding = '15px';
+    sliderPanel.style.boxSizing = 'border-box';
+    
+    let html = `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+        <h3 style="margin: 0; color: #4a90e2;">Simulation Controls</h3>
+        <button id="toggle-slider-panel" style="background: none; border: none; color: white; cursor: pointer;">
+          Minimize ▼
+        </button>
+      </div>
+      <div id="slider-container">
+    `;
+    
+    // Create sliders for all parameters
+    for (let i = 0; i < midiParams.paramNames.length; i++) {
+      const paramName = midiParams.paramNames[i];
+      const value = midiParams.faderValues[i];
+      const valuePercent = Math.round(value * 100);
+      
+      // Different styling for simulation vs gesture controls
+      const isGesture = i >= 8;
+      const sliderColor = isGesture ? '#e24a4a' : '#4a90e2';
+      const sectionClass = isGesture ? 'gesture-section' : 'param-section';
+      
+      // Add section header if this is the first gesture control
+      if (i === 8) {
+        html += `
+          <div style="margin-top: 15px; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #e24a4a;">Gesture Controls</h3>
+          </div>
+        `;
+      }
+      
+      html += `
+        <div class="${sectionClass}" style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <label for="slider-${i}" style="font-size: 12px;">${paramName}</label>
+            <span id="slider-value-${i}" style="font-size: 12px;">${valuePercent}%</span>
+          </div>
+          <input 
+            type="range" 
+            id="slider-${i}" 
+            min="0" 
+            max="1" 
+            step="0.01" 
+            value="${value}"
+            style="width: 100%; height: 8px; -webkit-appearance: none; appearance: none; background: #333; border-radius: 4px; outline: none; opacity: 0.7; transition: opacity .2s;"
+          >
+        </div>
+      `;
+    }
+    
+    html += `
+      </div>
+    `;
+    
+    sliderPanel.innerHTML = html;
+    document.body.appendChild(sliderPanel);
+    
+    // Add CSS for sliders
+    const style = document.createElement('style');
+    style.textContent = `
+      input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #4a90e2;
+        cursor: pointer;
+      }
+      
+      input[type=range]::-moz-range-thumb {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #4a90e2;
+        cursor: pointer;
+      }
+      
+      .gesture-section input[type=range]::-webkit-slider-thumb {
+        background: #e24a4a;
+      }
+      
+      .gesture-section input[type=range]::-moz-range-thumb {
+        background: #e24a4a;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Add event listeners to sliders
+    for (let i = 0; i < midiParams.paramNames.length; i++) {
+      const slider = document.getElementById(`slider-${i}`);
+      if (slider) {
+        slider.addEventListener('input', (e) => {
+          const value = parseFloat(e.target.value);
+          midiParams.faderValues[i] = value;
+          document.getElementById(`slider-value-${i}`).textContent = `${Math.round(value * 100)}%`;
+          
+          // Show parameter change notification
+          showParamChangeNotification(i, value);
+        });
+      }
+    }
+    
+    // Add toggle functionality for the slider panel
+    let sliderPanelMinimized = false;
+    document.getElementById('toggle-slider-panel').addEventListener('click', () => {
+      const container = document.getElementById('slider-container');
+      const button = document.getElementById('toggle-slider-panel');
+      
+      sliderPanelMinimized = !sliderPanelMinimized;
+      
+      if (sliderPanelMinimized) {
+        container.style.display = 'none';
+        button.textContent = 'Maximize ▲';
+      } else {
+        container.style.display = 'block';
+        button.textContent = 'Minimize ▼';
+      }
+    });
+  }
+  
   // Create status bar and parameter panels as HTML
   function createStatusBar() {
     // Create status bar
@@ -1240,7 +1391,7 @@ new p5((p) => {
     statusText.textContent = `Simulation: ${simulationState.toUpperCase()}`;
     
     const controlsText = document.createElement('div');
-    controlsText.textContent = 'S: Settings | R: Reset | P: Pause/Play';
+    controlsText.textContent = 'S: Settings | R: Reset | P: Pause/Play | C: Toggle Controls';
     
     statusBar.appendChild(statusText);
     statusBar.appendChild(controlsText);
@@ -1363,6 +1514,12 @@ new p5((p) => {
       } else if (event.key === 'm' || event.key === 'M') {
         cameraParams.mouseControl = !cameraParams.mouseControl;
         updateStatusBar();
+      } else if (event.key === 'c' || event.key === 'C') {
+        // Toggle slider panel if it exists
+        const sliderPanel = document.getElementById('slider-panel');
+        if (sliderPanel) {
+          sliderPanel.style.display = sliderPanel.style.display === 'none' ? 'block' : 'none';
+        }
       }
       
       // Number keys 1-9 to manually adjust parameters
