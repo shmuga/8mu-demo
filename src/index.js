@@ -17,9 +17,9 @@ new p5((p) => {
     paramNames: [
       'Size', 
       'Speed', 
-      'Complexity', 
-      'Color Hue', 
-      'Randomness', // Changed from Brightness to Randomness
+      'Gravity', // Changed from Complexity to Gravity
+      'Turbulence', // Changed from Color Hue to Turbulence
+      'Randomness',
       'Particle Density', 
       'Connection Density', 
       'Terrain Height',
@@ -358,13 +358,15 @@ new p5((p) => {
         const xPos = p.map(x, 0, resolution-1, -size/2, size/2);
         const zPos = p.map(z, 0, resolution-1, -size/2, size/2);
         
-        // Use multiple layers of noise for more interesting terrain
+        // Use multiple layers of noise for more interesting terrain with more elevation points
         const baseNoise = p.noise(xPos * noiseScale, zPos * noiseScale);
         const detailNoise = p.noise(xPos * noiseScale * 3, zPos * noiseScale * 3) * 0.3;
+        const microNoise = p.noise(xPos * noiseScale * 8, zPos * noiseScale * 8) * 0.15;
+        const ridgeNoise = Math.abs(p.noise(xPos * noiseScale * 2, zPos * noiseScale * 2) - 0.5) * 0.5;
         
         const height = p.map(
-          baseNoise + detailNoise, 
-          0, 1.3, 
+          baseNoise + detailNoise + microNoise + ridgeNoise, 
+          0, 1.8, 
           -organicModel.terrainHeight/2, 
           organicModel.terrainHeight/2
         );
@@ -513,8 +515,8 @@ new p5((p) => {
     
     const size = p.map(midiParams.smoothedValues[0], 0, 1, 0.5, 2);
     const speed = p.map(midiParams.smoothedValues[1], 0, 1, 0.1, 2);
-    const complexity = p.map(midiParams.smoothedValues[2], 0, 1, 0.5, 3);
-    const colorHue = p.map(midiParams.smoothedValues[3], 0, 1, 0, 360);
+    const gravity = p.map(midiParams.smoothedValues[2], 0, 1, 0.01, 0.2); // Changed from complexity to gravity
+    const turbulenceValue = p.map(midiParams.smoothedValues[3], 0, 1, 0.01, 0.3); // Changed from colorHue to turbulence
     const randomness = p.map(midiParams.smoothedValues[4], 0, 1, 0.01, 0.2); // Controls random impulses and movement
     const particleDensity = p.map(midiParams.smoothedValues[5], 0, 1, 0.2, 1);
     const connectionDensity = p.map(midiParams.smoothedValues[6], 0, 1, 0.2, 1);
@@ -606,20 +608,20 @@ new p5((p) => {
     for (let i = 0; i < organicModel.particles.length; i++) {
       const particle = organicModel.particles[i];
       
-      // Apply turbulence with randomness parameter - more movement on Y axis
+      // Apply turbulence with turbulence parameter - more movement on Y axis
       particle.velocity.add(
         p.createVector(
-          p.random(-turbulence - randomness, turbulence + randomness),
-          p.random(-turbulence - randomness * 1.5, turbulence + randomness * 1.5), // Increased Y movement
-          p.random(-turbulence - randomness, turbulence + randomness)
+          p.random(-turbulenceValue - randomness, turbulenceValue + randomness),
+          p.random(-turbulenceValue - randomness * 1.5, turbulenceValue + randomness * 1.5), // Increased Y movement
+          p.random(-turbulenceValue - randomness, turbulenceValue + randomness)
         )
       );
       
-      // Apply gravity towards center
+      // Apply gravity towards center - now controlled by gravity parameter
       const gravityForce = p5.Vector.sub(
         p.createVector(0, 0, 0),
         particle.position
-      ).normalize().mult(p.map(midiParams.faderValues[7], 0, 1, 0, 0.05) + forceParams.gravityStrength);
+      ).normalize().mult(gravity + forceParams.gravityStrength);
       
       particle.velocity.add(gravityForce);
       
