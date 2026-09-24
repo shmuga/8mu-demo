@@ -1,22 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <title>Midi Visuals</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="description" content="MIDI-reactive 3D particle terrain for the Music Thing Modular 8mu.">
+    <meta name="theme-color" content="#070a14">
+    <title>8mu Visuals</title>
     <script src="src/index.js" type="module"></script>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background-color: #000;
-      }
-      canvas {
-        display: block;
-      }
-    </style>
   </head>
   <body>
+    <div id="stage" aria-label="3D visualization. Drag to orbit, scroll or pinch to zoom, double-click to reset the view."></div>
+
+    <header class="hud hud-top-left">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <div class="brand-title">8mu Visuals</div>
+          <div class="brand-sub">MIDI-reactive terrain</div>
+        </div>
+      </div>
+      <div class="chips">
+        <span class="chip" id="chip-midi" data-status="pending"><span class="dot"></span><span class="chip-label">Connecting MIDI…</span></span>
+        <span class="chip" id="chip-state" data-state="running"><span class="dot"></span><span class="chip-label">Running</span></span>
+        <span class="chip chip-mono" id="chip-stats">— fps</span>
+      </div>
+    </header>
+
+    <nav class="hud hud-top-right toolbar" aria-label="Controls">
+      <button class="icon-btn" id="btn-pause" data-tip="Pause (Space)" aria-label="Pause">
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-reset" data-tip="New terrain (R)" aria-label="New terrain">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-orbit" data-tip="Auto-rotate (A)" aria-label="Auto-rotate" aria-pressed="true">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4.5"/><circle cx="12" cy="12" r="2.2"/></svg>
+      </button>
+      <span class="toolbar-sep" aria-hidden="true"></span>
+      <button class="icon-btn" id="btn-controls" data-tip="Controls (C)" aria-label="Controls" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" data-tip="MIDI & display (S)" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-fullscreen" data-tip="Fullscreen (F)" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-help" data-tip="Shortcuts (?)" aria-label="Keyboard shortcuts">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.7.3-1 .9-1 1.6v.4"/><path d="M12 17.2v.1"/></svg>
+      </button>
+    </nav>
+
+    <aside class="panel" id="controls-panel" aria-label="Parameter controls" hidden>
+      <div class="panel-head">
+        <h2>Controls</h2>
+        <button class="icon-btn small" id="btn-close-controls" aria-label="Close controls">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="panel-body">
+        <section>
+          <h3 class="section-title sim">Simulation</h3>
+          <div id="sim-controls" class="ctl-list"></div>
+        </section>
+        <section>
+          <h3 class="section-title gesture">
+            Gestures
+            <label class="mini-toggle" title="Gesture sliders return to centre when released, like the 8mu's tilt sensors">
+              <input type="checkbox" id="pref-spring-inline"> spring back
+            </label>
+          </h3>
+          <div id="gesture-controls" class="ctl-list"></div>
+        </section>
+      </div>
+      <div class="panel-foot">
+        <button class="btn ghost" id="btn-randomize">Randomize</button>
+        <button class="btn ghost" id="btn-defaults">Defaults</button>
+      </div>
+    </aside>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span class="toast-name"></span>
+      <span class="toast-bar"><i></i></span>
+      <span class="toast-value"></span>
+      <span class="toast-src"></span>
+    </div>
+
+    <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
+      <form method="dialog" class="dialog-head">
+        <h2 id="settings-title">Settings</h2>
+        <button class="icon-btn small" aria-label="Close settings">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </form>
+      <div class="dialog-body">
+        <section>
+          <div class="section-row">
+            <h3 class="section-title">MIDI mapping</h3>
+            <span class="muted" id="midi-devices"></span>
+          </div>
+          <p class="muted small">Type a CC number, or press <b>Learn</b> and move a fader on your controller. Mappings are saved in this browser.</p>
+          <div class="map-table" id="map-table" role="table"></div>
+          <div class="section-row end">
+            <span class="muted small mono" id="midi-monitor">Last CC: —</span>
+            <button class="btn ghost" id="btn-mappings-reset">Restore 8mu defaults</button>
+          </div>
+        </section>
+        <section>
+          <h3 class="section-title">Display</h3>
+          <div class="toggles">
+            <label class="switch"><input type="checkbox" data-pref="autoRotate"><span></span>Auto-rotate camera</label>
+            <label class="switch"><input type="checkbox" data-pref="wireframe"><span></span>Terrain wireframe</label>
+            <label class="switch"><input type="checkbox" data-pref="showBox"><span></span>Bounding box</label>
+            <label class="switch"><input type="checkbox" data-pref="springGestures"><span></span>Spring-back gesture sliders</label>
+            <label class="switch"><input type="checkbox" data-pref="showStats"><span></span>FPS &amp; particle count</label>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog id="help-dialog" class="dialog narrow" aria-labelledby="help-title">
+      <form method="dialog" class="dialog-head">
+        <h2 id="help-title">Shortcuts</h2>
+        <button class="icon-btn small" aria-label="Close shortcuts">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </form>
+      <div class="dialog-body">
+        <dl class="keys">
+          <dt><kbd>Space</kbd> <kbd>P</kbd></dt><dd>Pause / play</dd>
+          <dt><kbd>R</kbd></dt><dd>New terrain &amp; particles</dd>
+          <dt><kbd>C</kbd></dt><dd>Toggle control panel</dd>
+          <dt><kbd>S</kbd></dt><dd>MIDI &amp; display settings</dd>
+          <dt><kbd>A</kbd></dt><dd>Auto-rotate camera</dd>
+          <dt><kbd>W</kbd></dt><dd>Terrain wireframe</dd>
+          <dt><kbd>V</kbd></dt><dd>Reset camera view</dd>
+          <dt><kbd>H</kbd></dt><dd>Hide / show interface</dd>
+          <dt><kbd>F</kbd></dt><dd>Fullscreen</dd>
+          <dt><kbd>1</kbd>–<kbd>8</kbd></dt><dd>Nudge a parameter up (<kbd>Shift</kbd> = down)</dd>
+          <dt>Drag</dt><dd>Orbit camera</dd>
+          <dt>Scroll / pinch</dt><dd>Zoom</dd>
+          <dt>Double-click</dt><dd>Reset view (canvas) or parameter (slider)</dd>
+        </dl>
+      </div>
+    </dialog>
   </body>
 </html>

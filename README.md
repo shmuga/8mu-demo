@@ -8,21 +8,41 @@ Live demo: [https://8mu-demo.vercel.app/](https://8mu-demo.vercel.app/)
 
 ## Features
 
-- Real-time 3D visualization with particles and connections
-- MIDI controller support for parameter adjustment
-- On-screen sliders when no MIDI controller is detected
-- Interactive terrain with particle physics
-- Camera controls for exploring the 3D space
+- Real-time 3D particle swarm over a low-poly terrain, with springy connections
+- MIDI controller support with **hot-plug**, **MIDI learn** and mappings saved in the browser
+- Glass-style control panel with smoothed sliders; the 8mu tilt gestures appear as bipolar sliders that spring back to centre
+- Every parameter change eases in (frame-rate independent), and particles fade in/out instead of the scene rebuilding
+- Terrain is uploaded to the GPU once and scaled at draw time, so the render loop does very little CPU work
+- Orbit camera: drag, scroll/pinch zoom, double-click to reset; works on touch screens
 
 ## Controls
 
-- **S**: Toggle Settings
-- **R**: Reset Simulation
-- **P**: Pause/Play
-- **M**: Toggle Mouse Control
-- **C**: Toggle Control Sliders
-- **Mouse Drag**: Rotate Camera
-- **Mouse Wheel**: Zoom In/Out
+| Key | Action |
+| --- | --- |
+| **Space** / **P** | Pause / play |
+| **R** | New terrain & particles |
+| **C** | Toggle control panel |
+| **S** | MIDI mapping & display settings |
+| **A** | Auto-rotate camera |
+| **W** | Terrain wireframe |
+| **V** | Reset camera view |
+| **H** | Hide / show interface |
+| **F** | Fullscreen |
+| **1–8** | Nudge a parameter up (**Shift** = down) |
+| **?** | Shortcut overview |
+| Drag / Scroll / Pinch | Orbit / zoom camera |
+| Double-click | Reset view (canvas) or parameter (slider) |
+
+## Project layout
+
+| File | Purpose |
+| --- | --- |
+| `src/index.js` | p5 sketch entry: frame loop, lighting |
+| `src/params.js` | Parameter definitions, smoothing, saved preferences |
+| `src/midi.js` | Web MIDI setup, hot-plug, MIDI learn |
+| `src/simulation.js` | Terrain, particles, physics, drawing |
+| `src/camera.js` | Orbit camera and pointer input |
+| `src/ui.js` / `src/style.css` | HUD, control panel, dialogs, shortcuts |
 
 ## Getting Started
 
@@ -56,6 +76,6 @@ npm run build
 
 ## MIDI Controller Setup
 
-Connect your MIDI controller before starting the application for automatic detection. If no MIDI controller is detected, on-screen sliders will be displayed automatically.
+Plug in your controller at any time; it is detected automatically. If no MIDI controller is found, the on-screen control panel opens automatically.
 
-Default MIDI CC mappings can be adjusted in the Settings panel (press S to access).
+Default CC mappings match the 8mu (CC 34–47). To remap, press **S**, then type a CC number or press **Learn** and move a control. Mappings are stored in the browser's local storage.
