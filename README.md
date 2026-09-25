@@ -74,6 +74,10 @@ Then open your browser to the URL shown in the terminal (typically http://localh
 npm run build
 ```
 
+### Deploying to GitHub Pages
+
+No build output is committed. `.github/workflows/pages.yml` builds with Vite and publishes `dist/` on every push to `main`. One-time setup: **Settings → Pages → Source: GitHub Actions**. `vite.config.js` uses a relative `base`, so the same build also works at a domain root (e.g. Vercel).
+
 ## MIDI Controller Setup
 
 Plug in your controller at any time; it is detected automatically. If no MIDI controller is found, the on-screen control panel opens automatically.
