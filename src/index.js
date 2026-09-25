@@ -34,6 +34,7 @@ new p5((p) => {
 
     // Exposed for quick profiling from the console.
     window.__fps = () => Math.round(fps);
+    if (import.meta.env.DEV) window.__sim = simulation.sim;
   };
 
   p.draw = () => {

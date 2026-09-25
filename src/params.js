@@ -5,9 +5,9 @@
 export const PARAMS = [
   { id: 'size',        name: 'Size',               cc: 34, group: 'sim',     def: 0.45 },
   { id: 'speed',       name: 'Speed',              cc: 35, group: 'sim',     def: 0.35 },
-  { id: 'gravity',     name: 'Gravity',            cc: 36, group: 'sim',     def: 0.2 },
-  { id: 'turbulence',  name: 'Turbulence',         cc: 37, group: 'sim',     def: 0.15 },
-  { id: 'randomness',  name: 'Randomness',         cc: 38, group: 'sim',     def: 0.2 },
+  { id: 'gravity',     name: 'Gravity',            cc: 36, group: 'sim',     def: 0.35 },
+  { id: 'turbulence',  name: 'Turbulence',         cc: 37, group: 'sim',     def: 0.1 },
+  { id: 'randomness',  name: 'Randomness',         cc: 38, group: 'sim',     def: 0.15 },
   { id: 'particles',   name: 'Particle Density',   cc: 39, group: 'sim',     def: 0.5 },
   { id: 'connections', name: 'Connection Density', cc: 40, group: 'sim',     def: 0.5 },
   { id: 'terrain',     name: 'Terrain Height',     cc: 41, group: 'sim',     def: 0.45 },

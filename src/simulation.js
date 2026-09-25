@@ -25,7 +25,17 @@ const TERRAIN_STOPS = [
   [0.5, [226, 196, 222]]
 ];
 
-const ELASTICITY = 0.01;
+// Physics constants (world units, seconds).
+const STEP = 1 / 120;
+const MAX_STEPS = 8;
+const AIR_DRAG = 0.25;
+const GROUND_FRICTION = 1.5;
+const ATTRACTION = 15000; // gravitational constant for particle-particle pull
+const SOFTENING = 25; // avoids infinite pull at tiny distances
+const RESTITUTION = { ground: 0.72, wall: 0.8, particle: 0.85 };
+const SPRING = { k: 20, damping: 1, maxRest: 90 };
+
+const pairKey = (a, b) => (a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`);
 
 export function createSimulation(p) {
   const half = WORLD.size / 2;
@@ -43,7 +53,7 @@ export function createSimulation(p) {
     connectionsDirty: true,
     lastConnectionBuild: 0,
     connectionsPerParticle: -1,
-    forces: { vortex: 0, gravity: 0 }
+    accumulator: 0
   };
 
   // --- Terrain -------------------------------------------------------------
@@ -134,29 +144,24 @@ export function createSimulation(p) {
 
   // --- Particles -----------------------------------------------------------
 
+  let nextId = 1;
+
   function createParticle() {
-    const x = p.random(-half * 0.9, half * 0.9);
-    const z = p.random(-half * 0.9, half * 0.9);
-    const y = groundAt(x, z).y + p.random(30, 140);
+    const x = p.random(-half * 0.85, half * 0.85);
+    const z = p.random(-half * 0.85, half * 0.85);
+    // Spawn high up so particles visibly fall onto the terrain.
+    const y = p.random(WORLD.ceiling * 0.35, WORLD.ceiling * 0.9);
     const seed = p.noise(x * 0.02, z * 0.02);
     // Perlin noise clusters around 0.5, so stretch it before picking a colour.
     const pick = Math.floor(p.constrain((seed - 0.25) * 2, 0, 0.999) * PALETTE.length);
-    const color = PALETTE[pick];
-    const cp = [];
-    for (let i = 0; i < 4; i++) {
-      cp.push([x + p.random(-50, 50), y + p.random(-30, 30), z + p.random(-50, 50)]);
-    }
     return {
+      id: nextId++,
       x, y, z,
-      vx: p.random(-0.5, 0.5), vy: p.random(-0.2, 0.2), vz: p.random(-0.5, 0.5),
-      ox: x, oy: y, oz: z,
-      base: p.map(p.noise(x * 0.05, z * 0.05), 0, 1, 4, 12),
+      vx: p.random(-20, 20), vy: p.random(-10, 10), vz: p.random(-20, 20),
+      base: p.random(4, 12),
       r: 0,
-      color,
-      cp,
-      t: p.random(),
-      dir: 1,
-      noise: p.random(1000),
+      m: 1,
+      color: PALETTE[pick],
       grow: 0,
       dying: false
     };
@@ -166,12 +171,14 @@ export function createSimulation(p) {
     return Math.round(WORLD.maxParticles * p.map(get('particles'), 0, 1, 0.2, 1));
   }
 
-  // Rebuild nearest-neighbour springs. Pairs are de-duplicated.
+  // Rebuild nearest-neighbour springs. Pairs are de-duplicated, and springs
+  // that already existed keep their rest length so rebuilding doesn't jolt.
   function buildConnections() {
     const per = Math.floor(5 * get('connections'));
     sim.connectionsPerParticle = per;
-    sim.connections = [];
     sim.connectionsDirty = false;
+    const previous = new Map(sim.connections.map((c) => [pairKey(c.a, c.b), c.rest]));
+    sim.connections = [];
     if (per <= 0) return;
     const ps = sim.particles.filter((q) => !q.dying);
     const seen = new Set();
@@ -185,11 +192,12 @@ export function createSimulation(p) {
       }
       d.sort((m, n) => m[1] - n[1]);
       for (let k = 0; k < Math.min(per, d.length); k++) {
-        const j = d[k][0];
-        const key = i < j ? i * 1000 + j : j * 1000 + i;
+        const b = ps[d[k][0]];
+        const key = pairKey(a, b);
         if (seen.has(key)) continue;
         seen.add(key);
-        sim.connections.push({ a, b: ps[j], strength: p.random(0.01, 0.03), maxLength: Math.sqrt(d[k][1]) * 1.5 });
+        const rest = previous.get(key) ?? p.constrain(Math.sqrt(d[k][1]), 30, SPRING.maxRest);
+        sim.connections.push({ a, b, rest });
       }
     }
   }
@@ -200,6 +208,7 @@ export function createSimulation(p) {
     buildTerrainGeometry();
     sim.terrainHeight = p.map(get('terrain'), 0, 1, 20, 200);
     sim.particles = [];
+    sim.connections = [];
     const n = targetCount();
     for (let i = 0; i < n; i++) {
       const q = createParticle();
@@ -213,19 +222,8 @@ export function createSimulation(p) {
 
   function update(dt, now) {
     if (sim.paused) return;
-    const k = Math.min(3, dt * 60); // 1.0 at 60fps
 
-    const sizeScale = p.map(get('size'), 0, 1, 0.5, 2);
-    const speed = p.map(get('speed'), 0, 1, 0.1, 2);
-    const gravity = p.map(get('gravity'), 0, 1, 0.01, 0.2);
-    const turbulence = p.map(get('turbulence'), 0, 1, 0.01, 0.3);
-    const randomness = p.map(get('randomness'), 0, 1, 0.01, 0.2);
     sim.terrainHeight = p.map(get('terrain'), 0, 1, 20, 200);
-
-    const tilt = get('tiltFront') + get('tiltBack');
-    const lift = get('liftRight') + get('liftLeft');
-    sim.forces.vortex = p.map(tilt, 0, 2, 0, 0.05);
-    sim.forces.gravity = p.map(lift, 0, 2, 0, 0.1);
 
     // Grow/shrink the population a few particles per frame instead of rebuilding.
     const alive = sim.particles.filter((q) => !q.dying);
@@ -237,16 +235,74 @@ export function createSimulation(p) {
       for (let i = 0; i < Math.min(3, alive.length - want); i++) alive[alive.length - 1 - i].dying = true;
       sim.connectionsDirty = true;
     }
-
     if (Math.floor(5 * get('connections')) !== sim.connectionsPerParticle) sim.connectionsDirty = true;
     if (sim.connectionsDirty && now - sim.lastConnectionBuild > 150) {
       buildConnections();
       sim.lastConnectionBuild = now;
     }
 
-    const ps = sim.particles;
+    // Size and mass (mass ~ volume) follow the Size fader and pop-in animation.
+    const sizeScale = p.map(get('size'), 0, 1, 0.5, 2);
+    for (const q of sim.particles) {
+      q.grow = q.dying ? q.grow - dt * 3 : Math.min(1, q.grow + dt * 2);
+      q.r = q.base * sizeScale * easeOutBack(Math.max(0, q.grow));
+      q.m = Math.max(0.05, (q.base * sizeScale / 8) ** 3);
+    }
 
-    // Soft particle-particle repulsion.
+    // Fixed sub-steps keep springs and collisions stable at any frame rate.
+    const timeScale = p.map(get('speed'), 0, 1, 0.2, 2);
+    sim.accumulator = Math.min(sim.accumulator + dt * timeScale, STEP * MAX_STEPS);
+    while (sim.accumulator >= STEP) {
+      step(STEP, now);
+      sim.accumulator -= STEP;
+    }
+
+    // Drop fully shrunk particles.
+    if (sim.particles.some((q) => q.dying && q.grow <= 0)) {
+      const gone = new Set(sim.particles.filter((q) => q.dying && q.grow <= 0));
+      sim.particles = sim.particles.filter((q) => !gone.has(q));
+      sim.connections = sim.connections.filter((c) => !gone.has(c.a) && !gone.has(c.b));
+      sim.connectionsDirty = true;
+    }
+  }
+
+  function step(h, now) {
+    const ps = sim.particles;
+    const gravity = p.map(get('gravity'), 0, 1, 0, 800);
+    const wind = p.map(get('turbulence'), 0, 1, 0, 500);
+    const kickRate = get('randomness') * 1.5; // kicks per particle per second
+    const kickSpeed = p.map(get('randomness'), 0, 1, 80, 420);
+    // Gestures: tilt swirls the swarm, lift strengthens mutual attraction.
+    const vortex = p.map(get('tiltFront') + get('tiltBack'), 0, 2, 0, 350);
+    const G = ATTRACTION * (1 + 4 * (get('liftRight') + get('liftLeft')));
+    const t = now * 0.0003;
+
+    // Forces: gravity, air drag, wind, vortex, random kicks.
+    const drag = Math.exp(-AIR_DRAG * h);
+    for (const q of ps) {
+      q.vy -= gravity * h;
+      if (wind > 0) {
+        q.vx += (p.noise(q.x * 0.006, q.z * 0.006, t) - 0.5) * 2 * wind * h;
+        q.vy += (p.noise(q.x * 0.006 + 40, q.y * 0.006, t) - 0.5) * 2 * wind * h;
+        q.vz += (p.noise(q.z * 0.006 + 80, q.y * 0.006, t) - 0.5) * 2 * wind * h;
+      }
+      if (vortex > 0) {
+        const r = Math.hypot(q.x, q.z) || 1;
+        q.vx += (-q.z / r) * vortex * h;
+        q.vz += (q.x / r) * vortex * h;
+      }
+      if (kickRate > 0 && Math.random() < kickRate * h) {
+        // Mostly upward hop in a random direction.
+        const a = Math.random() * Math.PI * 2;
+        q.vx += Math.cos(a) * kickSpeed * 0.5;
+        q.vz += Math.sin(a) * kickSpeed * 0.5;
+        q.vy += kickSpeed * (0.6 + Math.random() * 0.4);
+      }
+      q.vx *= drag; q.vy *= drag; q.vz *= drag;
+    }
+
+    // Pairwise: mass-weighted attraction (softened inverse square) and
+    // elastic sphere collisions with momentum exchange.
     for (let i = 0; i < ps.length; i++) {
       const a = ps[i];
       for (let j = i + 1; j < ps.length; j++) {
@@ -254,124 +310,78 @@ export function createSimulation(p) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dz = b.z - a.z;
-        const min = (a.r + b.r) * 0.8;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < min * min && d2 > 1e-6) {
-          const f = (0.5 * k) / Math.sqrt(d2);
-          a.vx -= dx * f; a.vy -= dy * f; a.vz -= dz * f;
-          b.vx += dx * f; b.vy += dy * f; b.vz += dz * f;
+        if (d2 < 1e-6) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d;
+        const ny = dy / d;
+        const nz = dz / d;
+
+        const f = (G * h) / (d2 + SOFTENING * SOFTENING);
+        a.vx += nx * f * b.m; a.vy += ny * f * b.m; a.vz += nz * f * b.m;
+        b.vx -= nx * f * a.m; b.vy -= ny * f * a.m; b.vz -= nz * f * a.m;
+
+        const overlap = a.r + b.r - d;
+        if (overlap > 0) {
+          const ia = 1 / a.m;
+          const ib = 1 / b.m;
+          const share = overlap / (ia + ib);
+          a.x -= nx * share * ia; a.y -= ny * share * ia; a.z -= nz * share * ia;
+          b.x += nx * share * ib; b.y += ny * share * ib; b.z += nz * share * ib;
+          const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz;
+          if (vn < 0) {
+            const jn = (-(1 + RESTITUTION.particle) * vn) / (ia + ib);
+            a.vx -= nx * jn * ia; a.vy -= ny * jn * ia; a.vz -= nz * jn * ia;
+            b.vx += nx * jn * ib; b.vy += ny * jn * ib; b.vz += nz * jn * ib;
+          }
         }
       }
     }
 
-    const damping = Math.pow(0.98, k);
-    const impulseChance = randomness * 0.3 * k;
-    const impulseStrength = p.map(randomness, 0, 0.2, 0.5, 3.0);
-    const noiseStrength = p.map(randomness, 0, 0.2, 0.1, 0.5) * k;
-    const noiseTime = now * 0.0006;
-    const tv = turbulence + randomness;
-    const g = gravity + sim.forces.gravity;
-
-    for (const q of ps) {
-      q.grow = q.dying ? q.grow - dt * 3 : Math.min(1, q.grow + dt * 2);
-
-      // Turbulence (more vertical freedom).
-      q.vx += (Math.random() * 2 - 1) * tv * k;
-      q.vy += (Math.random() * 2 - 1) * (turbulence + randomness * 1.5) * k;
-      q.vz += (Math.random() * 2 - 1) * tv * k;
-
-      // Pull toward the centre.
-      const dist = Math.hypot(q.x, q.y, q.z) || 1;
-      q.vx -= (q.x / dist) * g * k;
-      q.vy -= (q.y / dist) * g * k;
-      q.vz -= (q.z / dist) * g * k;
-
-      // Vortex around the vertical axis.
-      if (sim.forces.vortex > 0) {
-        const r = Math.hypot(q.x, q.z) || 1;
-        q.vx += (-q.z / r) * sim.forces.vortex * k;
-        q.vz += (q.x / r) * sim.forces.vortex * k;
-      }
-
-      // Elastic return to spawn point.
-      q.vx += (q.ox - q.x) * ELASTICITY * k;
-      q.vy += (q.oy - q.y) * ELASTICITY * k;
-      q.vz += (q.oz - q.z) * ELASTICITY * k;
-
-      // Occasional random kicks.
-      if (Math.random() < impulseChance) {
-        const ux = Math.random() * 2 - 1;
-        const uy = Math.random() * 2 - 1;
-        const uz = Math.random() * 2 - 1;
-        const ul = Math.hypot(ux, uy, uz) || 1;
-        q.vx += (ux / ul) * impulseStrength;
-        q.vy += (uy / ul) * impulseStrength;
-        q.vz += (uz / ul) * impulseStrength;
-      }
-
-      q.vx *= damping; q.vy *= damping; q.vz *= damping;
-      q.x += q.vx * speed * k;
-      q.y += q.vy * speed * k;
-      q.z += q.vz * speed * k;
-
-      // Box walls.
-      if (q.x > half) { q.x = half; q.vx *= -0.8; } else if (q.x < -half) { q.x = -half; q.vx *= -0.8; }
-      if (q.z > half) { q.z = half; q.vz *= -0.8; } else if (q.z < -half) { q.z = -half; q.vz *= -0.8; }
-      if (q.y > WORLD.ceiling) { q.y = WORLD.ceiling; q.vy *= -0.8; }
-
-      q.r = q.base * sizeScale * easeOutBack(Math.max(0, q.grow));
-
-      // Terrain bounce: reflect only when moving into the surface.
-      const ground = groundAt(q.x, q.z);
-      if (q.y < ground.y + q.r * 0.5) {
-        q.y = ground.y + q.r * 0.8;
-        const dot = q.vx * ground.nx + q.vy * ground.ny + q.vz * ground.nz;
-        if (dot < 0) {
-          q.vx = (q.vx - 2 * dot * ground.nx) * 0.7;
-          q.vy = (q.vy - 2 * dot * ground.ny) * 0.7;
-          q.vz = (q.vz - 2 * dot * ground.nz) * 0.7;
-        }
-        q.vx += ground.nx * 0.5 * speed;
-        q.vy += ground.ny * 0.5 * speed;
-        q.vz += ground.nz * 0.5 * speed;
-      }
-
-      // Drift along a private Bezier path.
-      q.t += 0.002 * speed * q.dir * k;
-      if (q.t > 1 || q.t < 0) { q.dir *= -1; q.t = Math.min(1, Math.max(0, q.t)); }
-      if (Math.random() < 0.05 * k) {
-        const c = q.cp;
-        const t = q.t;
-        q.x += (p.bezierPoint(c[0][0], c[1][0], c[2][0], c[3][0], t) - q.x) * 0.03;
-        q.y += (p.bezierPoint(c[0][1], c[1][1], c[2][1], c[3][1], t) - q.y) * 0.03;
-        q.z += (p.bezierPoint(c[0][2], c[1][2], c[2][2], c[3][2], t) - q.z) * 0.03;
-      }
-
-      // Continuous Perlin wander.
-      q.x += (p.noise(q.noise, noiseTime) - 0.5) * noiseStrength;
-      q.y += (p.noise(q.noise + 100, noiseTime) - 0.5) * noiseStrength;
-      q.z += (p.noise(q.noise + 200, noiseTime) - 0.5) * noiseStrength;
-    }
-
-    // Spring constraints.
+    // Connections are damped springs.
     for (const c of sim.connections) {
-      const dx = c.b.x - c.a.x;
-      const dy = c.b.y - c.a.y;
-      const dz = c.b.z - c.a.z;
-      const d = Math.hypot(dx, dy, dz);
-      if (d > c.maxLength) {
-        const f = ((d - c.maxLength) * c.strength) / d;
-        c.a.x += dx * f; c.a.y += dy * f; c.a.z += dz * f;
-        c.b.x -= dx * f; c.b.y -= dy * f; c.b.z -= dz * f;
-      }
+      const { a, b } = c;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dz = b.z - a.z;
+      const d = Math.hypot(dx, dy, dz) || 1;
+      const nx = dx / d;
+      const ny = dy / d;
+      const nz = dz / d;
+      const relV = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz;
+      const f = (SPRING.k * (d - c.rest) + SPRING.damping * relV) * h;
+      a.vx += (nx * f) / a.m; a.vy += (ny * f) / a.m; a.vz += (nz * f) / a.m;
+      b.vx -= (nx * f) / b.m; b.vy -= (ny * f) / b.m; b.vz -= (nz * f) / b.m;
     }
 
-    // Drop fully shrunk particles.
-    if (ps.some((q) => q.dying && q.grow <= 0)) {
-      sim.particles = ps.filter((q) => !(q.dying && q.grow <= 0));
-      sim.connectionsDirty = true;
-      const gone = new Set(ps.filter((q) => q.dying && q.grow <= 0));
-      sim.connections = sim.connections.filter((c) => !gone.has(c.a) && !gone.has(c.b));
+    // Integrate, then resolve walls, ceiling and terrain.
+    for (const q of ps) {
+      q.x += q.vx * h;
+      q.y += q.vy * h;
+      q.z += q.vz * h;
+
+      const lim = half - q.r;
+      if (q.x > lim) { q.x = lim; q.vx = -Math.abs(q.vx) * RESTITUTION.wall; }
+      else if (q.x < -lim) { q.x = -lim; q.vx = Math.abs(q.vx) * RESTITUTION.wall; }
+      if (q.z > lim) { q.z = lim; q.vz = -Math.abs(q.vz) * RESTITUTION.wall; }
+      else if (q.z < -lim) { q.z = -lim; q.vz = Math.abs(q.vz) * RESTITUTION.wall; }
+      if (q.y > WORLD.ceiling - q.r) { q.y = WORLD.ceiling - q.r; q.vy = -Math.abs(q.vy) * RESTITUTION.wall; }
+
+      const g = groundAt(q.x, q.z);
+      if (q.y - q.r < g.y) {
+        q.y = g.y + q.r;
+        const vn = q.vx * g.nx + q.vy * g.ny + q.vz * g.nz;
+        if (vn < 0) {
+          // Reflect the normal component; friction slows sliding along slopes.
+          const e = 1 + RESTITUTION.ground;
+          q.vx -= e * vn * g.nx;
+          q.vy -= e * vn * g.ny;
+          q.vz -= e * vn * g.nz;
+        }
+        const fr = Math.exp(-GROUND_FRICTION * h);
+        q.vx *= fr;
+        q.vz *= fr;
+      }
     }
   }
 

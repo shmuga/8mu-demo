@@ -8,7 +8,9 @@ Live demo: [https://8mu-demo.vercel.app/](https://8mu-demo.vercel.app/)
 
 ## Features
 
-- Real-time 3D particle swarm over a low-poly terrain, with springy connections
+- Real-time 3D physics: particles fall under gravity, bounce off the terrain, walls and each other (mass-based collisions), attract each other in proportion to their mass, and are linked by damped spring connections
+- Faders: **Gravity** (downward pull), **Turbulence** (wind field), **Randomness** (random hops), **Speed** (time scale), plus size, density, connections and terrain height
+- 8mu gestures: **Tilt** swirls the swarm and pitches the camera, **Lift** strengthens mutual attraction and rolls the camera, **Rotate** spins the view
 - MIDI controller support with **hot-plug**, **MIDI learn** and mappings saved in the browser
 - Glass-style control panel with smoothed sliders; the 8mu tilt gestures appear as bipolar sliders that spring back to centre
 - Every parameter change eases in (frame-rate independent), and particles fade in/out instead of the scene rebuilding
